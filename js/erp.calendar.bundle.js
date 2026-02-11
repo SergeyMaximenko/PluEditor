@@ -88,6 +88,15 @@ const CALENDAR_CSS = `
   color: rgba(0,0,0,.85) !important;
 }
 
+/* FullCalendar добавляет " - " после времени — убираем */
+.fc .fc-event-time:after,
+.fc .fc-event-time::after{
+  content: "" !important;
+  display: none !important;
+}
+
+
+
 /* ===================== SKD (background) поверх робіт ===================== */
 
 
@@ -168,6 +177,7 @@ const CALENDAR_CSS = `
 .fc .fc-erpLogin-button .erp-login-label{
   pointer-events: none;
 }
+
 
 
 

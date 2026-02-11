@@ -195,6 +195,10 @@ const mError = document.getElementById("mError");
 const LS_USER_ID_CODED = "erp_userIdCoded";
 const LS_USER_NAME     = "erp_userName";
 
+ctxClear?.addEventListener("click", () => {
+  clearEditActive();
+});
+
 // зберігати вибір при зміні
 if (mPlaceWork){
   mPlaceWork.addEventListener("change", () => {
@@ -1427,6 +1431,16 @@ async function requireLogin(){
 
 const calendar = widget.getCalendar();
 
+// ✅ якщо користувач робить жовте виділення — скидаємо синій active event
+calendar.on("select", () => {
+  clearEditActive();
+});
+
+calendar.on("unselect", () => {
+  clearEditActive();
+});
+
+
 async function reloadCalendarData(reason = ""){
   if (!auth.isLoggedIn()){
     setEventsSafe([]);
@@ -1465,6 +1479,10 @@ async function reloadCalendarData(reason = ""){
 // Click: открыть модалку если есть ошибки, либо temp create
 calendar.on("eventClick", async (info) => {
   info.jsEvent.preventDefault();
+
+    // ✅ якщо був жовтий selection — прибираємо його
+  widget.unselect();
+
   const ev = info.event;
    // ✅ 1 клик = выделили
   setEditActive(ev.id);
