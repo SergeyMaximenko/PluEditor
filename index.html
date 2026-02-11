@@ -1,0 +1,848 @@
+<!doctype html>
+<html lang="uk">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Outlook-like Day Calendar</title>
+
+  <!-- FullCalendar (CDN) -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/interaction.global.min.js"></script>
+
+  <style>
+    :root {
+      --outlook-accent: #1A73E8;
+
+      --event-bg: #DCEBFF;
+      --event-border: #B8D2FF;
+      --event-accent: #1A73E8;
+
+      --grid-hour: rgba(0, 0, 0, .18);
+      --grid-minor: rgba(0, 0, 0, .08);
+
+      --bg: #FFFFFF;
+      --text: #111;
+
+      /* 🟡 selection */
+      --sel-bg: rgba(255, 193, 7, 0.38);
+      --sel-line: rgba(255, 193, 7, 1);
+
+      /* off-hours */
+      --offhours: #F3F4F6;
+
+      /* SKD markers */
+      --skd-from: rgba(16, 185, 129, 1);
+      /* green */
+      --skd-to: rgb(187, 141, 5);
+      /* red */
+    }
+
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    #calendar {
+      height: 100vh;
+    }
+
+    /* ===== НЕ календарные стили (модалка/контекст/спинеры) ===== */
+
+    .ctx {
+      position: fixed;
+      display: none;
+      z-index: 10000;
+      background: #fff;
+      border: 1px solid rgba(0, 0, 0, .12);
+      border-radius: 12px;
+      box-shadow: 0 12px 28px rgba(0, 0, 0, .18);
+      min-width: 260px;
+      padding: 6px;
+      user-select: none;
+    }
+
+    .ctx button {
+      width: 100%;
+      border: none;
+      background: transparent;
+      text-align: left;
+      padding: 10px 10px;
+      border-radius: 10px;
+      cursor: pointer;
+      color: #111;
+      font-weight: 600;
+    }
+
+    .ctx button:hover {
+      background: rgba(26, 115, 232, .10);
+    }
+
+    .ctx .hint {
+      padding: 8px 10px;
+      color: #666;
+      font-size: 12px;
+    }
+
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, .35);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      z-index: 9999;
+    }
+
+    .modal {
+      width: min(980px, 100%);
+      background: #fff;
+      border-radius: 14px;
+      padding: 16px;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, .25);
+      border: 1px solid rgba(0, 0, 0, .08);
+    }
+
+    .row {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      margin: 10px 0;
+    }
+
+    label {
+      width: 120px;
+      font-weight: 600;
+      padding-top: 10px;
+      color: rgba(0, 0, 0, .8);
+    }
+
+    input,
+    textarea {
+      width: 100%;
+      padding: 10px;
+      border-radius: 10px;
+      border: 1px solid rgba(0, 0, 0, .18);
+      font: inherit;
+      box-sizing: border-box;
+    }
+
+    textarea {
+      height: 90px;
+      resize: vertical;
+    }
+
+    .actions {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+      margin-top: 12px;
+    }
+
+    button {
+      padding: 10px 14px;
+      border-radius: 10px;
+      border: 1px solid rgba(0, 0, 0, .16);
+      background: #fff;
+      cursor: pointer;
+    }
+
+    button.primary {
+      border: none;
+      background: var(--outlook-accent);
+      color: white;
+    }
+
+    .small {
+      color: #555;
+      font-size: 13px;
+      margin-top: 4px;
+    }
+
+    .modal-title {
+      font-size: 18px;
+      font-weight: 800;
+      margin-bottom: 6px;
+    }
+
+    .row.row-when label {
+      padding-top: 8px;
+    }
+
+    .when-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 10px;
+      width: 100%;
+    }
+
+    .when-grid .mini {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .when-grid .mini span {
+      font-size: 12px;
+      color: rgba(0, 0, 0, .62);
+      font-weight: 700;
+    }
+
+    /* ===== DOM spinner inside event (center) - FIXED ===== */
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    .dom-spinner {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      z-index: 3;
+    }
+
+    .dom-spinner .ring {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      border: 3px solid rgba(0, 0, 0, .18);
+      border-top-color: rgb(169, 20, 149);
+      animation: spin .9s linear infinite;
+    }
+
+    /* page spinner */
+    .page-spinner {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255, 255, 255, .75);
+      backdrop-filter: blur(1px);
+      z-index: 9000;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .12s ease;
+    }
+
+    .page-spinner.is-on {
+      opacity: 1;
+      pointer-events: all;
+    }
+
+    .page-spinner .ring {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      border: 5px solid rgba(0, 0, 0, .14);
+      border-top-color: rgba(26, 115, 232, 1);
+      animation: spin .9s linear infinite;
+    }
+
+    .page-spinner .label {
+      margin-top: 10px;
+      font-weight: 700;
+      color: rgba(0, 0, 0, .72);
+      font-size: 14px;
+      text-align: center;
+    }
+
+    .page-spinner .box {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 14px 18px;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, .85);
+      border: 1px solid rgba(0, 0, 0, .08);
+      box-shadow: 0 10px 28px rgba(0, 0, 0, .12);
+    }
+
+    /* ===== load error (center) ===== */
+    .load-error {
+      position: fixed;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 10000;
+
+      min-width: 320px;
+      max-width: 720px;
+
+      background: #fff;
+      border: 1px solid rgba(220, 38, 38, .35);
+      border-left: 6px solid #dc2626;
+      border-radius: 14px;
+
+      padding: 16px 20px;
+      color: #7f1d1d;
+      font-weight: 700;
+      font-size: 15px;
+      line-height: 1.4;
+
+      box-shadow: 0 16px 40px rgba(0, 0, 0, .22);
+      white-space: pre-wrap;
+      text-align: center;
+    }
+
+    .modal-error {
+      margin-top: 10px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid rgba(220, 38, 38, .35);
+      background: rgba(220, 38, 38, .06);
+      color: #7f1d1d;
+      font-weight: 700;
+      font-size: 13px;
+      white-space: pre-wrap;
+    }
+
+    /* ===== CREATE error state ===== */
+    .fc-timegrid-event.is-create-error {
+      background: rgba(220, 38, 38, .08) !important;
+      border-color: rgba(220, 38, 38, .6) !important;
+    }
+
+    .fc-timegrid-event.is-create-error::after {
+      content: "Не збережено • " attr(data-create-error) " • натисніть щоб виправити";
+      position: absolute;
+      bottom: 4px;
+      left: 8px;
+      right: 8px;
+      font-size: 11px;
+      font-weight: 800;
+      color: #7f1d1d;
+      text-align: center;
+      pointer-events: none;
+    }
+
+    /* ===== UPDATE error state ===== */
+    .fc-timegrid-event.is-update-error {
+      background: rgba(220, 38, 38, .08) !important;
+      border-color: rgba(220, 38, 38, .6) !important;
+    }
+
+    .fc-timegrid-event.is-update-error::after {
+      content: "Не оновлено • " attr(data-update-error) " • натисніть щоб виправити";
+      position: absolute;
+      bottom: 4px;
+      left: 8px;
+      right: 8px;
+      font-size: 11px;
+      font-weight: 800;
+      color: #7f1d1d;
+      text-align: center;
+      pointer-events: none;
+    }
+
+    /* ===== DELETE error state ===== */
+    .fc-timegrid-event.is-delete-error {
+      background: rgba(220, 38, 38, .08) !important;
+      border-color: rgba(220, 38, 38, .6) !important;
+    }
+
+    .fc-timegrid-event.is-delete-error::after {
+      content: "Не видалено • " attr(data-delete-error) " • натисніть щоб виправити";
+      position: absolute;
+      bottom: 4px;
+      left: 8px;
+      right: 8px;
+      font-size: 11px;
+      font-weight: 800;
+      color: #7f1d1d;
+      text-align: center;
+      pointer-events: none;
+    }
+
+    /* ===== KPLD autocomplete (small list => show all on focus if empty) ===== */
+    .ac {
+      position: relative;
+      width: 100%;
+    }
+
+    .ac-list {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: calc(100% + 6px);
+      background: #fff;
+      border: 1px solid rgba(0, 0, 0, .12);
+      border-radius: 12px;
+      box-shadow: 0 12px 28px rgba(0, 0, 0, .18);
+      overflow: hidden;
+      z-index: 20000;
+      max-height: 320px;
+      overflow-y: auto;
+    }
+
+    .ac-item {
+      padding: 10px 12px;
+      cursor: pointer;
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+    }
+
+    .ac-item:hover {
+      background: rgba(26, 115, 232, .08);
+    }
+
+    .ac-code {
+      font-weight: 900;
+      white-space: nowrap;
+      color: rgba(0, 0, 0, .85);
+    }
+
+    .ac-name {
+      color: rgba(0, 0, 0, .72);
+      font-weight: 600;
+      line-height: 1.25;
+    }
+
+    .ac-empty {
+      padding: 10px 12px;
+      color: rgba(0, 0, 0, .55);
+      font-weight: 700;
+    }
+
+    .ac-item.is-active {
+      background: rgba(26, 115, 232, .12);
+    }
+
+    .ev-obj-code{
+      color: #0000ff;      /* любой цвет */
+      font-weight: 700;
+      --text-decoration: underline;
+    }
+     .ev-kzaj-code{
+      color: #00a300;      /* любой цвет */
+      font-weight: 700;
+      --text-decoration: underline;
+    }
+
+
+
+    .modal-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+}
+
+.icon-btn{
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid rgba(0,0,0,.16);
+  background:#fff;
+  cursor:pointer;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size: 16px;
+}
+.icon-btn:hover{ background: rgba(26,115,232,.08); }
+
+
+
+/* ===== ACTIVE EDIT (когда модалка открыта на редактирование) ===== */
+/* ===== ACTIVE EDIT (когда модалка открыта на редактирование) ===== */
+.fc .fc-timegrid-event.is-edit-active{
+  background: rgba(26, 115, 232, .22) !important;    /* заливка контейнера */
+  border-color: rgba(26, 115, 232, .95) !important;  /* рамка */
+  outline: 2px solid rgba(26, 115, 232, .35);
+  outline-offset: -1px;
+}
+
+/* ✅ ВАЖНО: перекрываем фон внутренних слоёв */
+.fc .fc-timegrid-event.is-edit-active .fc-event-main,
+.fc .fc-timegrid-event.is-edit-active .fc-event-main-frame,
+.fc .fc-timegrid-event.is-edit-active .fc-event-main-frame *,
+.fc .fc-timegrid-event.is-edit-active .fc-event-main *,
+.fc .fc-timegrid-event.is-edit-active .fc-event-title-container{
+  background: transparent !important;
+}
+
+/* Если хочешь именно “заливку” внутри, а не прозрачность — можно так: */
+.fc .fc-timegrid-event.is-edit-active .fc-event-main-frame{
+  background: rgba(26, 115, 232, .22) !important;
+}
+
+/* левая акцентная полоска */
+.fc .fc-timegrid-event.is-edit-active::before{
+  background: rgba(26, 115, 232, 1) !important;
+}
+
+/* чуть усилить читаемость текста */
+.fc .fc-timegrid-event.is-edit-active .fc-event-time,
+.fc .fc-timegrid-event.is-edit-active .fc-event-title{
+  color: rgba(0,0,0,.92) !important;
+}
+
+
+/* ===== INFO modal tweaks ===== */
+#infoBackdrop .modal{
+  border-left: 6px solid var(--outlook-accent);
+}
+#infoBackdrop .modal-title{
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+
+/* ===== KPLD clear (red cross) ===== */
+.ac-clearable{
+  position: relative;
+}
+
+.ac-clear-btn{
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  border: none;
+  background: transparent;
+  color: #dc2626; /* red */
+  font-size: 16px;
+  font-weight: 900;
+  cursor: pointer;
+  display: none; /* по умолчанию скрыт */
+  padding: 4px;
+  line-height: 1;
+}
+
+.ac-clear-btn:hover{
+  color: #b91c1c;
+  background: rgba(220,38,38,.08);
+  border-radius: 6px;
+}
+
+/* чтобы текст не наезжал на крестик */
+.ac-clearable input{
+  padding-right: 34px;
+}
+
+
+
+
+/* ===== LOGIN button ===== */
+
+.fc .fc-erpLogin-button{
+  border-radius: 12px !important;
+  padding: 6px 10px !important;
+  font-weight: 600;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+  white-space: nowrap !important;
+  transition: background .15s ease;
+}
+
+/* ===== NOT LOGGED IN (зелёная) ===== */
+.fc .fc-erpLogin-button.is-logged-out{
+  background: #16a34a !important;
+  border-color: #16a34a !important;
+  color: #fff !important;
+}
+
+.fc .fc-erpLogin-button.is-logged-out:hover{
+  background: #15803d !important;
+  border-color: #15803d !important;
+}
+
+/* ===== LOGGED IN (чистый светлый стиль) ===== */
+.fc .fc-erpLogin-button:not(.is-logged-out){
+  background: #f8fafc !important;
+  border: 1px solid rgba(0,0,0,.12) !important;
+  color: #111 !important;
+}
+
+.fc .fc-erpLogin-button:not(.is-logged-out):hover{
+  background: #eef2f7 !important;
+}
+
+/* "Вітаємо" */
+.fc .fc-erpLogin-button .erp-login-hello{
+  font-weight: 500;
+  color: rgba(0,0,0,.65);
+  margin-right: 4px;
+}
+
+/* Имя пользователя */
+.fc .fc-erpLogin-button .erp-login-user{
+  font-weight: 800;
+  color: #111;
+}
+
+/* Разделительная линия */
+.fc .fc-erpLogin-button .erp-login-sep{
+  width: 1px;
+  height: 18px;
+  background: rgba(0,0,0,.15);
+}
+
+/* Кнопка Вийти */
+.fc .fc-erpLogin-button .erp-login-logout{
+  margin-left: 4px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: rgba(220,38,38,.10);
+  color: #dc2626;
+  font-weight: 800;
+  line-height: 1;
+  transition: background .15s ease;
+}
+
+.fc .fc-erpLogin-button .erp-login-logout:hover{
+  background: rgba(220,38,38,.15);
+}
+
+
+
+
+
+
+/* ===== Toast (bottom popup) ===== */
+.erp-toast{
+  position: fixed;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%) translateY(16px);
+  min-width: 260px;
+  max-width: min(720px, calc(100vw - 24px));
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgba(20,20,20,.92);
+  color: #fff;
+  font: 14px/1.35 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  box-shadow: 0 10px 30px rgba(0,0,0,.25);
+  opacity: 0;
+  transition: opacity .18s ease, transform .18s ease;
+  z-index: 999999;
+  cursor: default;
+  user-select: text;
+}
+.erp-toast.show{
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+.erp-toast .title{
+  font-weight: 800;
+  margin-bottom: 4px;
+}
+.erp-toast .msg{
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.erp-toast.error{ background: rgba(160, 30, 30, .94); }
+.erp-toast.warn{  background: rgba(150, 110, 10, .94); }
+.erp-toast.ok{    background: rgba(20, 120, 60, .94); }
+
+
+
+/* ===== Toolbar spacing: отодвинуть правый блок (login) от view-кнопок ===== */
+.fc .fc-header-toolbar .fc-toolbar-chunk:last-child{
+  margin-left: 12px;   /* ← меняй: 8 / 12 / 16 / 20 */
+}
+
+/* (опционально) чуть больше воздуха между самими view-кнопками day/week */
+.fc .fc-header-toolbar .fc-toolbar-chunk .fc-button-group{
+  gap: 6px;            /* работает в современных браузерах */
+}
+
+/* запасной вариант, если gap вдруг не сработает */
+.fc .fc-header-toolbar .fc-toolbar-chunk .fc-button-group > .fc-button{
+  margin-right: 6px;
+}
+.fc .fc-header-toolbar .fc-toolbar-chunk .fc-button-group > .fc-button:last-child{
+  margin-right: 0;
+}
+
+
+
+  </style>
+</head>
+
+<body>
+  <div id="calendar"></div>
+  <div id="loadError" class="load-error" style="display:none;"></div>
+
+  <div id="pageSpinner" class="page-spinner is-on" aria-hidden="false">
+    <div class="box">
+      <div class="ring"></div>
+      <div class="label">Завантаження…</div>
+    </div>
+  </div>
+
+  <div id="ctx" class="ctx">
+    <div id="ctxHint" class="hint">Виберіть інтервал</div>
+    <button id="ctxCreate">➕ Додати запис</button>
+    <button id="ctxClear">🧹 Очистити виділення</button>
+  </div>
+
+  <div id="backdrop" class="modal-backdrop" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-label="Деталі запису">
+      
+
+
+<div class="modal-head">
+  <div class="modal-title" id="modalTitle">Деталі</div>
+
+  <!-- 📧 paste from Outlook -->
+  <button id="mPasteMail" class="icon-btn" type="button" title="Вставити з Outlook (буфер)">
+    📧
+  </button>
+</div>
+
+
+      <div id="mWhen" class="small"></div>
+
+      <div class="row row-when">
+        <label>Коли</label>
+        <div class="when-grid">
+          <div class="mini">
+            <span>Дата</span>
+            <input id="mDate" type="date" />
+          </div>
+          <div class="mini">
+            <span>Час з</span>
+            <input id="mFrom" type="time" step="60" />
+          </div>
+          <div class="mini">
+            <span>Час по</span>
+            <input id="mTo" type="time" step="60" />
+          </div>
+        </div>
+      </div>
+
+      <div class="row">
+        <label>Для журналу</label>
+        <textarea id="mDescription" rows="4"></textarea>
+      </div>
+
+      <!-- ✅ KPLD autocomplete -->
+      <div class="row">
+        <label>Завдання</label>
+        <div class="ac ac-clearable">
+  <input id="mKpldText" type="text" autocomplete="off"
+    placeholder__="Оберіть (список зʼявиться при фокусі) або введіть для пошуку…" />
+  <input id="mKpld" type="hidden" value="" />
+
+  <!-- ❌ clear button -->
+  <button type="button" id="mKpldClear" class="ac-clear-btn" title="Очистити">✖</button>
+
+  <div id="mKpldList" class="ac-list" style="display:none;"></div>
+</div>
+      </div>
+
+
+
+<!-- ✅ PlaceWork -->
+<div class="row">
+  <label>Місце роботи</label>
+  <select id="mPlaceWork" style="width:100%; padding:10px; border-radius:10px; border:1px solid rgba(0,0,0,.18); font:inherit; box-sizing:border-box;">
+    <option value="">Основний офіс</option>
+    <option value="Б">Б — Хвороба</option>
+    <option value="Г">Г — Готель</option>
+    <option value="Д">Д — Робота вдома</option>
+    <option value="К">К — Виїзд на об'єкт замовника</option>
+    <option value="О">О — Відпочинок</option>
+    <option value="П">П — Офіс в КПІ</option>
+    <option value="С">С — Узгоджене відхилення від СКД</option>
+    <option value="Я">Я — Інше</option>
+  </select>
+</div>
+
+
+
+      <div id="mError" class="modal-error" style="display:none;"></div>
+
+      <div class="actions">
+        <button id="mDelete" style="display:none;">❌ Видалити</button>
+        <button id="mCancel">Скасувати</button>
+        <button id="mSave" class="primary">Зберегти</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="confirmBackdrop" class="modal-backdrop" style="display:none;">
+    <div class="modal" style="max-width:420px;">
+      <div class="modal-title">🗑️ Видалити запис?</div>
+
+      <div class="small" style="margin-top:6px;">
+        Ви впевнені, що хочете видалити цей запис?<br>
+        <b>Дію неможливо скасувати.</b>
+      </div>
+
+      <div class="actions" style="margin-top:16px;">
+        <button id="confirmCancel">Скасувати</button>
+        <button id="confirmOk" class="primary" style="background:#dc2626;">Видалити</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== UI CONFIRM modal (универсальная) ===== -->
+<div id="uiConfirmBackdrop" class="modal-backdrop" style="display:none;">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-title" id="uiConfirmTitle">Підтвердження</div>
+
+    <div id="uiConfirmText" class="small" style="margin-top:8px; white-space:pre-wrap;"></div>
+
+    <div class="actions" style="margin-top:16px;">
+      <button id="uiConfirmCancel">Скасувати</button>
+      <button id="uiConfirmOk" class="primary">OK</button>
+    </div>
+  </div>
+</div>
+
+
+  <!-- ===== INFO / ALERT modal ===== -->
+<div id="infoBackdrop" class="modal-backdrop" style="display:none;">
+  <div class="modal" style="max-width:520px;">
+    <div class="modal-title" id="infoTitle">Повідомлення</div>
+
+    <div id="infoText" class="small" style="margin-top:10px; white-space:pre-wrap;"></div>
+
+    <div class="actions" style="margin-top:16px;">
+      <button id="infoOk" class="primary">OK</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== LOGIN modal ===== -->
+<div id="loginBackdrop" class="modal-backdrop" style="display:none;">
+  <div class="modal" style="max-width:520px;">
+    <div class="modal-title">🔐 Вхід</div>
+
+    <div class="row">
+      <label>Логін</label>
+      <input id="lUser" type="text" autocomplete="username" placeholder="введіть логін" />
+    </div>
+
+    <div class="row">
+      <label>Пароль</label>
+      <input id="lPass" type="password" autocomplete="current-password" placeholder="введіть пароль" />
+    </div>
+
+    <div id="lError" class="modal-error" style="display:none;"></div>
+
+    <div class="actions">
+      <button id="lCancel">Скасувати</button>
+      <button id="lOk" class="primary">Увійти</button>
+    </div>
+  </div>
+</div>
+
+
+
+  <script type="module" src="./js/app.js"></script>
+</body>
+
+</html>
