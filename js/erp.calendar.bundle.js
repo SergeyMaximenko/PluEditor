@@ -314,7 +314,7 @@ export class ERPDayCalendar {
       firstDay: 1,
       locale: "uk",
 
-      headerToolbar: { left: "prev,next today", center: "title", right: "timeGridDay,timeGridWeek,erpRefresh,erpLogin" },
+      headerToolbar: { left: "erpRefresh,prev,next today,timeGridDay,timeGridWeek", center: "title", right: "erpLogin" },
 
       customButtons: {
         erpRefresh: {

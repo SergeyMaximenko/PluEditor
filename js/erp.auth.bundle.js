@@ -282,7 +282,7 @@ function writeAuth({ id, userName }){
     function refresh(){
       const auth = readAuth();
       if (!auth){
-        opts.setButtonText("Логін");
+        opts.setButtonText("Увійти в обліковий запис");
         return;
       }
       opts.setButtonText(`Вітаємо ${auth.userName} [Вийти]`);
