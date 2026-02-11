@@ -1168,7 +1168,7 @@ function openModal(mode, payload){
     pldPrefillByKpld(mKpld.value);
 
     modalTitle.textContent = "Додати запис";
-    mSave.textContent = "✅ Додати";
+    mSave.textContent = "Додати";
     mDelete.style.display = "none";
 
     setModalError(payload?.errorText ? ("⚠️ " + payload.errorText) : "");
@@ -1294,6 +1294,10 @@ function setEventsSafe(events){
 const widget = new ERPDayCalendar("#calendar", {
   ctx: { el: ctx, hintEl: ctxHint, btnCreate: ctxCreate, btnClear: ctxClear },
 
+
+  onRefreshClick: async () => {
+  await reloadCalendarData("manual refresh");
+},
   onRangeChanged: async ({ from, to }) => {
     showPageSpinner("datesSet");
     try{
@@ -1322,6 +1326,14 @@ const widget = new ERPDayCalendar("#calendar", {
     } finally {
       hidePageSpinner("datesSet");
     }
+  },
+
+    onRefreshClick: async () => {
+    if (!auth.isLoggedIn()){
+      toast("Для оновлення потрібно залогінитись.", "warn", "🔐 Потрібен вхід");
+      return;
+    }
+    await reloadCalendarData("manual refresh");
   },
 
   onLoginClick: async () => {
@@ -1430,6 +1442,26 @@ async function requireLogin(){
 }
 
 const calendar = widget.getCalendar();
+
+function isDateInActiveRange(date){
+  const view = calendar?.view;
+  if (!view) return true;
+
+  const d = new Date(date);
+  const from = new Date(view.activeStart);
+  const to   = new Date(view.activeEnd); // activeEnd — EXCLUSIVE
+
+  return d.getTime() >= from.getTime() && d.getTime() < to.getTime();
+}
+
+function gotoDateIfOutOfRange(date){
+  if (!date) return;
+  if (isDateInActiveRange(date)) return;
+
+  // Перехід на день/тиждень, який містить дату події
+  calendar.gotoDate(new Date(date));
+}
+
 
 // ✅ якщо користувач робить жовте виділення — скидаємо синій active event
 calendar.on("select", () => {
@@ -1692,6 +1724,10 @@ mSave.onclick = async () => {
 
       closeModal();
       widget.unselect();
+
+      // ✅ ДОДАЙ ОЦЕ:
+      gotoDateIfOutOfRange(m.start);
+
       const newId = await createOrResubmitTempEvent(ev);
       if (newId) setEditActive(newId);
       return;
@@ -1699,6 +1735,10 @@ mSave.onclick = async () => {
 
     closeModal();
     widget.unselect();
+
+    // ✅ ДОДАЙ ОЦЕ:
+    gotoDateIfOutOfRange(modalModel.start);
+
     const newId = await createJobFromModal(modalModel);
     if (newId) setEditActive(newId);
     return;
@@ -1719,6 +1759,10 @@ mSave.onclick = async () => {
     applyModelToEvent(ev, m);
 
     closeModal();
+
+    // ✅ ДОДАЙ ОЦЕ:
+    gotoDateIfOutOfRange(m.start);
+
     await safeUpdateEvent(ev);
   }
 };

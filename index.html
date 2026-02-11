@@ -665,46 +665,43 @@
   margin-right: 0;
 }
 
-/* autocomplete rich rows — normal layout */
+/* autocomplete rich rows (FIX vertical centering for 1-line items) */
 #mKpldList .ac-item{
   padding: 10px 12px;
-  cursor: pointer;
   display: flex;
-  flex-direction: row;      /* ✅ обратно в строку */
-  align-items: flex-start;  /* верх строки */
-  gap: 12px;
+  flex-direction: column;    /* ✅ строка + описание вертикально */
+  justify-content: center;   /* ✅ центр по высоте */
+  gap: 2px;                  /* компактный зазор между line и desc */
+  cursor: pointer;
 }
 
-/* левая часть (код + obj + kzaj) */
 #mKpldList .ac-line{
   display: flex;
   gap: 10px;
-  align-items: center;      /* ✅ центр по высоте строки */
-  white-space: nowrap;      /* не переносить */
-  flex-shrink: 0;           /* не сжимать */
+  align-items: center;       /* ✅ выравнивание внутри строки */
+  line-height: 1.3;          /* ✅ одинаковая высота строки */
 }
 
-/* правая часть (описание) */
-#mKpldList .ac-desc{
-  color: #111;
+#mKpldList .ac-head{
+  white-space: nowrap;       /* 🔥 не переносить код/объект/заказ */
+  display: inline-flex;
+  gap: 10px;
+  align-items: center;
   line-height: 1.3;
 }
 
-/* стили кодов */
-#mKpldList .ac-kpld{ font-weight:700; }
-#mKpldList .ac-obj{ color:#1a73e8; font-weight:600; }
-#mKpldList .ac-kzaj{ color:#0a8a3a; font-weight:600; }
+#mKpldList .ac-kpld{ font-weight: 700; }
+#mKpldList .ac-obj{  color:#1a73e8; font-weight: 600; }
+#mKpldList .ac-kzaj{ color:#0a8a3a; font-weight: 600; }
+
+#mKpldList .ac-desc{
+  margin-top: 4px;
+  color: #111;
+  line-height: 1.3;          /* ✅ чтобы 1 строка и 2 строки выглядели одинаково */
+}
 
 
-/* убрать дефолтное выделение/фокус от FC */
-.fc .fc-event:focus,
-.fc .fc-event:focus-visible{
-  outline: none !important;
-}
-.fc .fc-event-selected{
-  box-shadow: none !important;
-  outline: none !important;
-}
+
 
 
 

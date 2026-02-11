@@ -178,6 +178,65 @@ const CALENDAR_CSS = `
   pointer-events: none;
 }
 
+/* 🔄 Refresh button — акуратна, без великого фону */
+.fc .fc-erpRefresh-button{
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 6px !important;
+  font-size: 18px;
+  color: #334155 !important;
+}
+
+
+
+
+
+/* ===== REFRESH button (як "Вітаємо") ===== */
+.fc .fc-erpRefresh-button{
+  border-radius: 12px !important;
+  padding: 6px 10px !important;
+  font-weight: 600;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  white-space: nowrap !important;
+
+  background: #f8fafc !important;
+  border: 1px solid rgba(0,0,0,.12) !important;
+  color: #111 !important;
+
+  transition: background .15s ease;
+}
+
+.fc .fc-erpRefresh-button:hover{
+  background: #eef2f7 !important;
+}
+
+.fc .fc-erpRefresh-button:focus,
+.fc .fc-erpRefresh-button:focus-visible{
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.fc .fc-erpRefresh-button .erp-refresh-label{
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  pointer-events: none; /* щоб клік працював по всій кнопці */
+}
+
+.fc .fc-erpRefresh-button .erp-refresh-ico{
+  font-weight: 900;
+  color: rgba(0,0,0,.70);
+  font-size: 16px;
+  line-height: 1;
+}
+
+.fc .fc-erpRefresh-button .erp-refresh-text{
+  font-weight: 800;       /* як UserName у "Вітаємо" */
+  color: #111;
+}
 
 
 
@@ -255,23 +314,31 @@ export class ERPDayCalendar {
       firstDay: 1,
       locale: "uk",
 
-      headerToolbar: { left: "prev,next today", center: "title", right: "timeGridDay,timeGridWeek,erpLogin" },
+      headerToolbar: { left: "prev,next today", center: "title", right: "timeGridDay,timeGridWeek,erpRefresh,erpLogin" },
 
       customButtons: {
+        erpRefresh: {
+    text: "↻ Оновити",
+    click: () => { this.hooks.onRefreshClick?.({ calendar: this.calendar }); }
+  },
         erpLogin: {
           text: "",
           click: () => { this.hooks.onLoginClick?.({ calendar: this.calendar }); }
         }
       },
 
-      viewDidMount: () => { this._syncLoginButtonDom(); },
-      datesSet: async (arg) => {
-        this._syncLoginButtonDom();
-        const { from, to } = viewToRange(arg.view);
-        if (this.hooks.onRangeChanged) {
-          await this.hooks.onRangeChanged({ from, to, view: arg.view, calendar: this.calendar });
-        }
-      },
+viewDidMount: () => { 
+  this._syncRefreshButtonDom();
+  this._syncLoginButtonDom(); 
+},
+datesSet: async (arg) => {
+  this._syncRefreshButtonDom();
+  this._syncLoginButtonDom();
+  const { from, to } = viewToRange(arg.view);
+  if (this.hooks.onRangeChanged) {
+    await this.hooks.onRangeChanged({ from, to, view: arg.view, calendar: this.calendar });
+  }
+},
 
       slotLaneClassNames: (arg) => {
         const d = arg.date;
@@ -331,6 +398,21 @@ export class ERPDayCalendar {
       },
 
       eventDidMount: (info) => {
+
+        info.el.addEventListener("mousedown", (e) => {
+  if (e.button === 2) { // ПКМ
+    e.preventDefault();
+    info.el.blur();
+  }
+});
+
+        info.el.addEventListener("contextmenu", (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  if (typeof e.stopImmediatePropagation === "function") e.stopImmediatePropagation();
+}, true);
+
+
         info.el.addEventListener("dblclick", (e) => {
           e.preventDefault();
           const id = info.event.id;
@@ -418,20 +500,20 @@ export class ERPDayCalendar {
     this.ctx = hooks.ctx || null;
     if (this.ctx?.el && this.ctx?.hintEl && this.ctx?.btnCreate && this.ctx?.btnClear){
 this.el.addEventListener("contextmenu", (e) => {
-  // ✅ ПКМ по событию не трогаем вообще
-  if (e.target.closest(".fc-event")) return;
+  // ✅ Всегда показываем наш диалог и никогда не даём FC/браузеру выделять событие
+  const insideCalendar = !!e.target.closest("#calendar, .fc");
+  if (!insideCalendar) return;
 
-  // ✅ меню только по слотам/сетке
-  const hitSlot = !!(
-    e.target.closest(".fc-timegrid-slot") ||
-    e.target.closest(".fc-timegrid-slot-lane") ||
-    e.target.closest(".fc-timegrid-col")
-  );
-  if (!hitSlot) return;
-
+  // 🔥 гасим браузерное меню + гасим обработчики FullCalendar
   e.preventDefault();
+  e.stopPropagation();
+  if (typeof e.stopImmediatePropagation === "function") e.stopImmediatePropagation();
+
+  // (опционально) если ПКМ по событию — НЕ делаем выделение, НЕ открываем модалку, просто показываем меню
   this._showCtx(e.clientX, e.clientY);
-});
+}, true); // ✅ важно: CAPTURE, чтобы перехватить раньше FC
+
+
 
       document.addEventListener("mousedown", (e) => {
         if (this.ctx.el.style.display === "block" && !this.ctx.el.contains(e.target)) this._hideCtx();
@@ -474,7 +556,23 @@ this.el.addEventListener("contextmenu", (e) => {
     return { start, end };
   }
 
+
+_syncRefreshButtonDom(){
+  const btn = this.el.querySelector(".fc-erpRefresh-button");
+  if (!btn) return;
+
+  // робимо як у login: чистимо і збираємо контент
+  btn.textContent = "";
+  btn.innerHTML = `
+    <span class="erp-refresh-label">
+      <span class="erp-refresh-ico">↻</span>
+      <span class="erp-refresh-text">Оновити</span>
+    </span>
+  `;
+}
+
   _syncLoginButtonDom(){
+
     const btn = this.el.querySelector(".fc-erpLogin-button");
     if (!btn) return;
 
