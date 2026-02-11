@@ -90,13 +90,28 @@ const CALENDAR_CSS = `
 
 /* ===================== SKD (background) поверх робіт ===================== */
 
+
 /* 1) піднімаємо весь шар background над подіями */
+
+
+
+
+
+
+
 .fc .fc-timegrid-col-bg{
   z-index: 6 !important;
 }
 .fc .fc-timegrid-event-harness{
   z-index: 3 !important;
 }
+
+
+
+
+
+
+
 
 /* 2) сам harness для SKD поверх */
 .fc .fc-timegrid-bg-harness.skd-marker{
@@ -153,6 +168,10 @@ const CALENDAR_CSS = `
 .fc .fc-erpLogin-button .erp-login-label{
   pointer-events: none;
 }
+
+
+
+
 `;
 
 function pad2(n){ return String(n).padStart(2,'0'); }
@@ -189,6 +208,7 @@ function viewToRange(view){
   return { from, to };
 }
 
+
 export class ERPDayCalendar {
   constructor(target, hooks = {}){
     injectCalendarCssOnce(CALENDAR_CSS);
@@ -206,7 +226,7 @@ export class ERPDayCalendar {
     this._loginBtnText = "Логін";
 
     this.calendar = new FullCalendar.Calendar(this.el, {
-      initialView: 'timeGridDay',
+      initialView: "timeGridDay",
       nowIndicator: true,
 
       eventResizableFromStart: true,
@@ -217,36 +237,36 @@ export class ERPDayCalendar {
       unselectAuto: false,
       selectOverlap: true,
 
-      snapDuration: '00:05:00',
-      slotDuration: '00:15:00',
-      slotLabelInterval: '01:00',
+      snapDuration: "00:05:00",
+      slotDuration: "00:15:00",
+      slotLabelInterval: "01:00",
 
       allDaySlot: false,
       firstDay: 1,
-      locale: 'uk',
+      locale: "uk",
 
-      headerToolbar: { left: 'prev,next today', center: 'title', right: 'timeGridDay,timeGridWeek,erpLogin' },
+      headerToolbar: { left: "prev,next today", center: "title", right: "timeGridDay,timeGridWeek,erpLogin" },
 
-      // ✅ FIX: робимо кастом-кнопку без “приклеювання” тексту
       customButtons: {
         erpLogin: {
-          text: "", // важливо: НЕ даємо FullCalendar свій text-вузол
+          text: "",
           click: () => { this.hooks.onLoginClick?.({ calendar: this.calendar }); }
         }
       },
 
-      // ✅ FIX: на кожен ререндер header гарантовано виставляємо 1 лейбл
       viewDidMount: () => { this._syncLoginButtonDom(); },
       datesSet: async (arg) => {
-        this._syncLoginButtonDom(); // при навігації теж
+        this._syncLoginButtonDom();
         const { from, to } = viewToRange(arg.view);
-        if (this.hooks.onRangeChanged) await this.hooks.onRangeChanged({ from, to, view: arg.view, calendar: this.calendar });
+        if (this.hooks.onRangeChanged) {
+          await this.hooks.onRangeChanged({ from, to, view: arg.view, calendar: this.calendar });
+        }
       },
 
       slotLaneClassNames: (arg) => {
         const d = arg.date;
         const mins = d.getHours() * 60 + d.getMinutes();
-        if (mins < 8*60 || mins >= 21*60) return ['offhours-slot'];
+        if (mins < 8*60 || mins >= 21*60) return ["offhours-slot"];
         return [];
       },
 
@@ -301,7 +321,6 @@ export class ERPDayCalendar {
       },
 
       eventDidMount: (info) => {
-        // dblclick -> edit request
         info.el.addEventListener("dblclick", (e) => {
           e.preventDefault();
           const id = info.event.id;
@@ -317,8 +336,6 @@ export class ERPDayCalendar {
 
       eventContent: (arg) => {
         const ev = arg.event;
-
-        // SKD background-маркери — без тексту
         if (ev.extendedProps?.__skd_marker || ev.display === "background") return true;
 
         const start = ev.start;
@@ -326,11 +343,10 @@ export class ERPDayCalendar {
 
         const t1 = fmtTime(start);
         const t2 = fmtTime(end);
-
         const dur = durationUaShort(minutesDiff(start, end));
 
         const timeLine = `${t1}–${t2} (${dur})`;
-        const title = (ev.title);
+        const title = ev.title;
 
         return {
           html: `
@@ -352,8 +368,6 @@ export class ERPDayCalendar {
     });
 
     this.calendar.render();
-
-    // ✅ після render — ще раз синк (на випадок першого рендера)
     this._syncLoginButtonDom();
 
     // unselect only on real drag start
@@ -402,7 +416,6 @@ export class ERPDayCalendar {
         if (this.ctx.el.style.display === "block" && !this.ctx.el.contains(e.target)) this._hideCtx();
       });
 
-      // Esc closes ctx
       document.addEventListener("keydown", (e) => {
         if (e.key === "Escape") this._hideCtx();
       });
@@ -414,7 +427,7 @@ export class ERPDayCalendar {
       };
 
       this.ctx.btnCreate.onclick = () => {
-        const sel = this.selection || this.lastSelection;
+        const sel = this.selection || this.lastSelection || this._getDefaultCreateSelection();
         if (!sel) return;
         if (!isWithinSingleDay(sel.start, sel.end)) return;
 
@@ -422,25 +435,36 @@ export class ERPDayCalendar {
         this.hooks.onCreateRequested?.({ start: sel.start, end: sel.end, calendar: this.calendar });
       };
     }
+  } // ✅ constructor end
+
+  // ✅ default selection (если ничего не выделено)
+  _getDefaultCreateSelection(){
+    const base = new Date(this.calendar.getDate());
+    const now = new Date();
+
+    base.setHours(now.getHours(), now.getMinutes(), 0, 0);
+
+    const snap = 5;
+    const mins = base.getMinutes();
+    base.setMinutes(Math.floor(mins / snap) * snap, 0, 0);
+
+    const start = new Date(base);
+    const end = new Date(start.getTime() + 15 * 60 * 1000);
+    return { start, end };
   }
 
-  // ✅ FIX: гарантуємо 1 span і тільки 1 текст
-  // ✅ FIX: гарантуємо 1 span і акуратне розділення "Вітаємо / Ім'я / Вийти"
   _syncLoginButtonDom(){
     const btn = this.el.querySelector(".fc-erpLogin-button");
     if (!btn) return;
 
-    // беремо актуальний текст, який ти задаєш через setLoginButtonText()
     const t = String(this._loginBtnText || "Логін").trim();
 
-    // 1) стан логіна (для CSS)
     const isLoggedIn = /^Вітаємо\s+/i.test(t);
     btn.classList.toggle("is-logged-out", !isLoggedIn);
 
-    // 2) гарантуємо 1 контейнер-лейбл
     let label = btn.querySelector(".erp-login-label");
     if (!label){
-      btn.textContent = "";               // прибрати "склеєні" текст-вузли
+      btn.textContent = "";
       label = document.createElement("span");
       label.className = "erp-login-label";
       btn.appendChild(label);
@@ -449,18 +473,14 @@ export class ERPDayCalendar {
       label.innerHTML = "";
     }
 
-    // 3) якщо НЕ залогінений — просто текст "Логін"
     if (!isLoggedIn){
       label.textContent = t;
       return;
     }
 
-    // 4) парсимо "Вітаємо USER [Вийти]" або "Вітаємо USER"
-    //    USER може містити пробіли
     const m = t.match(/^\s*Вітаємо\s+(.+?)(?:\s*\[\s*Вийти\s*\]\s*)?$/i);
     const user = (m && m[1]) ? m[1].trim() : "";
 
-    // 5) будуємо красиву розмітку: "Вітаємо" + "USER" + "|" + "Вийти"
     const hello = document.createElement("span");
     hello.className = "erp-login-hello";
     hello.textContent = "Вітаємо ";
@@ -482,13 +502,11 @@ export class ERPDayCalendar {
     label.appendChild(logout);
   }
 
-
-
   _showCtx(x, y){
     if (!this.ctx) return;
     const { el, hintEl, btnCreate } = this.ctx;
 
-    const sel = this.selection || this.lastSelection;
+    const sel = this.selection || this.lastSelection || this._getDefaultCreateSelection();
 
     hintEl.textContent = `${fmtTime(sel.start)}–${fmtTime(sel.end)}`;
     btnCreate.disabled = false;
@@ -511,10 +529,9 @@ export class ERPDayCalendar {
 
   getCalendar(){ return this.calendar; }
 
-  // ✅ FIX: заміна тексту без “дописування”
   setLoginButtonText(text){
     this._loginBtnText = String(text ?? "Логін");
-    this._syncLoginButtonDom(); // на випадок якщо header вже перемальований
+    this._syncLoginButtonDom();
   }
 
   setEvents(events){
@@ -530,3 +547,4 @@ export class ERPDayCalendar {
     this._hideCtx();
   }
 }
+

@@ -382,13 +382,13 @@
       overflow-y: auto;
     }
 
-    .ac-item {
-      padding: 10px 12px;
-      cursor: pointer;
-      display: flex;
-      gap: 10px;
-      align-items: flex-start;
-    }
+.ac-item {
+  padding: 10px 12px;
+  cursor: pointer;
+  display: flex;
+  gap: 10px;
+  align-items: center;   /* ✅ центр по вертикали */
+}
 
     .ac-item:hover {
       background: rgba(26, 115, 232, .08);
@@ -664,6 +664,38 @@
 .fc .fc-header-toolbar .fc-toolbar-chunk .fc-button-group > .fc-button:last-child{
   margin-right: 0;
 }
+
+/* autocomplete rich rows — normal layout */
+#mKpldList .ac-item{
+  padding: 10px 12px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: row;      /* ✅ обратно в строку */
+  align-items: flex-start;  /* верх строки */
+  gap: 12px;
+}
+
+/* левая часть (код + obj + kzaj) */
+#mKpldList .ac-line{
+  display: flex;
+  gap: 10px;
+  align-items: center;      /* ✅ центр по высоте строки */
+  white-space: nowrap;      /* не переносить */
+  flex-shrink: 0;           /* не сжимать */
+}
+
+/* правая часть (описание) */
+#mKpldList .ac-desc{
+  color: #111;
+  line-height: 1.3;
+}
+
+/* стили кодов */
+#mKpldList .ac-kpld{ font-weight:700; }
+#mKpldList .ac-obj{ color:#1a73e8; font-weight:600; }
+#mKpldList .ac-kzaj{ color:#0a8a3a; font-weight:600; }
+
+
 
 
 

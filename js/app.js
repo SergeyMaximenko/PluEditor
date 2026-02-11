@@ -138,7 +138,6 @@ function setLastPlaceWork(v){
   }catch{}
 }
 
-
 const LS_AUTH_KEY = "erp_cal_auth_v2"; // ✅ тот же ключ что в ERPAuth
 
 function getAuthFromLs(){
@@ -156,8 +155,6 @@ function getAuthFromLs(){
   return { userIdCoded, userName };
 }
 
-
-
 function withAuthParams(params){
   const { userIdCoded, userName } = getAuthFromLs();
   const p = params instanceof URLSearchParams ? params : new URLSearchParams(params || {});
@@ -165,8 +162,6 @@ function withAuthParams(params){
   if (userName)    p.set("UserName", userName);
   return p;
 }
-
-
 
 // ========================================================
 // [БЛОК 3] DOM-ССЫЛКИ (календарь/модалка/контекст/спиннеры)
@@ -200,14 +195,12 @@ const mError = document.getElementById("mError");
 const LS_USER_ID_CODED = "erp_userIdCoded";
 const LS_USER_NAME     = "erp_userName";
 
-
 // зберігати вибір при зміні
 if (mPlaceWork){
   mPlaceWork.addEventListener("change", () => {
     setLastPlaceWork(mPlaceWork.value);
   });
 }
-
 
 function setModalError(text){
   if (!mError) return;
@@ -234,7 +227,6 @@ function hideLoadError(){
   loadErrorEl.textContent = "";
 }
 
-
 // ========================================================
 // [БЛОК 4] OUTLOOK PASTE (кнопка + хоткей)
 // ========================================================
@@ -258,7 +250,6 @@ document.addEventListener("keydown", (e) => {
   }
 });
 
-
 // ========================================================
 // [БЛОК 5] PAGE SPINNER (глобальный спиннер загрузки страницы)
 // ========================================================
@@ -277,7 +268,6 @@ function hidePageSpinner(reason){
   }
   log("PAGE spinner OFF", pageSpinnerCounter, reason || "");
 }
-
 
 // ========================================================
 // [БЛОК 6] SPINNER ВНУТРИ СОБЫТИЯ (DOM spinner внутри event)
@@ -315,25 +305,19 @@ function findEventEl(eventId){
 let editActiveEventId = null;
 
 function setEditActive(eventId){
-  // снять старую подсветку
   if (editActiveEventId){
     const oldEl = findEventEl(editActiveEventId);
     if (oldEl) oldEl.classList.remove("is-edit-active");
   }
-
   editActiveEventId = eventId || null;
-
-  // включить новую
   if (editActiveEventId){
     const el = findEventEl(editActiveEventId);
     if (el) el.classList.add("is-edit-active");
   }
 }
-
 function clearEditActive(){
   setEditActive(null);
 }
-
 
 function startSaving(eventId, reason){
   savingIds.add(eventId);
@@ -348,12 +332,9 @@ function stopSaving(eventId, reason){
   log("SPINNER OFF", eventId, reason || "");
 }
 
-
 // ========================================================
 // [БЛОК 7] МАРКЕРЫ ОШИБОК НА СОБЫТИЯХ (create/update/delete)
 // ========================================================
-// Принцип: текст ошибки хранится в extendedProps, а DOM класс+dataset делаются в onEventDidMount
-
 function markCreateError(ev){ const el = findEventEl(ev.id); if (el) el.classList.add("is-create-error"); }
 function clearCreateError(ev){ const el = findEventEl(ev.id); if (el) el.classList.remove("is-create-error"); }
 function applyCreateErrorText(ev, msg){
@@ -388,7 +369,6 @@ function clearDeleteErrorText(ev){
   clearDeleteError(ev);
 }
 
-
 // ========================================================
 // [БЛОК 8] API URLS + JSON HELPERS (общие функции чтения/нормализации)
 // ========================================================
@@ -399,7 +379,6 @@ const API_DELETE_URL = "https://webclient.it-enterprise.com/ws/api/_PLUTEST_DEL"
 const API_SKD_URL    = "https://webclient.it-enterprise.com/ws/api/_PLUTEST_GETSKD";
 const API_PLD_URL    = "https://webclient.it-enterprise.com/ws/api/_PLUTEST_GETPLD";
 
-// Унифицированное чтение JSON (даже если сервер ошибочно шлёт text/plain)
 async function readApiJson(resp, opName){
   const ct = (resp.headers.get("content-type") || "").toLowerCase();
   if (ct.includes("application/json") || ct.includes("text/json") || ct.includes("+json")) {
@@ -414,7 +393,6 @@ async function readApiJson(resp, opName){
   catch { throw new Error(`${opName}: expected JSON, got: ${raw}`); }
 }
 
-// Нормализация ответа API к единому виду
 function normalizeApiResult(obj){
   if (!obj || typeof obj !== "object"){
     return { Success:false, Id:0, MessageError:"Некоректна відповідь сервера", objCode:"", kzajCode:"" };
@@ -433,22 +411,43 @@ function throwIfNotSuccess(opName, res){
   throw new Error(res.MessageError || `${opName}: Success=false`);
 }
 
+// ========================================================
+// [БЛОК 9] KPLD AUTOCOMPLETE (PLD) — ✅ ОБНОВЛЕНО: obj/kzaj в списке
+// ========================================================
 
-// ========================================================
-// [БЛОК 9] KPLD AUTOCOMPLETE (PLD) — как было, без изменения логики
-// ========================================================
-const pldCache = new Map(); // kpld -> "KPLD — NPLD"
+// Кэш теперь хранит объект: kpld -> { kpld,npld,pldObjCode,pldKzaj, labelText }
+const pldCache = new Map();
 let pldDebTimer = null;
 
 let acItems = [];
 let acActive = -1;
 let acOpen = false;
 
+// Строка для поля ввода (БЕЗ html)
+function buildPldInputText(it){
+  const k = String(it?.kpld ?? "").trim();
+  const obj = String(it?.pldObjCode ?? "").trim();
+  const kz = String(it?.pldKzaj ?? "").trim();
+  const n = String(it?.npld ?? "").trim();
+
+  const parts = [];
+  if (k) parts.push(k);
+  if (obj) parts.push(obj);
+  if (kz) parts.push(kz);
+  const head = parts.join("  ");
+
+  if (!head && !n) return "";
+  if (!head) return n;
+  if (!n) return head;
+  return `${head} — ${n}`;
+}
+
 function pldSet(kpld, labelText){
   const k = (kpld === "" || kpld === null || kpld === undefined) ? "" : String(Number(kpld) || "");
   mKpld.value = k;
   mKpldText.value = labelText || (k ? k : "");
 }
+
 function pldHideList(){
   acOpen = false;
   acItems = [];
@@ -456,6 +455,7 @@ function pldHideList(){
   mKpldList.style.display = "none";
   mKpldList.innerHTML = "";
 }
+
 function acUpdateActive(){
   const els = [...mKpldList.querySelectorAll(".ac-item")];
   els.forEach((el, i) => el.classList.toggle("is-active", i === acActive));
@@ -469,16 +469,22 @@ function acUpdateActive(){
     else if (bottom > list.scrollTop + list.clientHeight) list.scrollTop = bottom - list.clientHeight;
   }
 }
+
 function acPickIndex(i){
   if (i < 0 || i >= acItems.length) return;
   const it = acItems[i];
+
   const code = String(it.kpld);
-  const label = it.npld ? `${it.kpld} — ${it.npld}` : code;
-  pldCache.set(code, label);
-  pldSet(code, label);
+  const labelText = buildPldInputText(it);
+
+  // кэшируем объект целиком
+  pldCache.set(code, { ...it, labelText });
+
+  pldSet(code, labelText);
   pldHideList();
   updateKpldClearVisibility();
 }
+
 function pldRenderList(items){
   acItems = Array.isArray(items) ? items : [];
   acOpen = true;
@@ -491,12 +497,22 @@ function pldRenderList(items){
   }
 
   mKpldList.innerHTML = acItems.map(it => {
-    const code = String(it.kpld).replace(/"/g,'&quot;');
-    const name = String(it.npld || "").replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const kpld = escapeHtml(String(it.kpld ?? ""));
+    const obj  = escapeHtml(String(it.pldObjCode ?? ""));
+    const kzaj = escapeHtml(String(it.pldKzaj ?? ""));
+    const name = escapeHtml(String(it.npld ?? ""));
+
+    // data-* оставляем минимально нужное
     return `
-      <div class="ac-item" data-kpld="${code}" data-name="${name}">
-        <div class="ac-code">${code}</div>
-        <div class="ac-name">${name}</div>
+      <div class="ac-item" data-kpld="${kpld}">
+<div class="ac-line">
+  <span class="ac-head">
+    <span class="ac-kpld">${kpld}</span>
+    ${obj ? `&nbsp;<span class="ac-obj">${obj}</span>` : ``}
+    ${kzaj ? `&nbsp;<span class="ac-kzaj">${kzaj}</span>` : ``}
+  </span>
+</div>
+        <div class="ac-desc">${name}</div>
       </div>
     `;
   }).join("");
@@ -518,8 +534,7 @@ async function apiGetPld({ q = "", kpld = "" } = {}){
   params.set("q", q ? String(q) : "");
   params.set("kpld", (kpld !== "" && kpld != null) ? String(kpld) : "0");
 
-  params = withAuthParams(params); // ✅ добавит UserIdCoded/UserName
-
+  params = withAuthParams(params);
   const url = `${API_PLD_URL}?${params.toString()}`;
 
   log("API PLD ->", url);
@@ -540,7 +555,9 @@ async function apiGetPld({ q = "", kpld = "" } = {}){
     .filter(x => x && typeof x === "object")
     .map(x => ({
       kpld: Number(x.kpld ?? x.KPLD ?? x.Kpld ?? 0) || 0,
-      npld: String(x.npld ?? x.NPLD ?? x.Npld ?? x.name ?? x.text ?? "").trim()
+      npld: String(x.npld ?? x.NPLD ?? x.Npld ?? x.name ?? x.text ?? "").trim(),
+      pldObjCode: String(x.pldObjCode ?? x.PldObjCode ?? x.PLDOBJCODE ?? x.objCode ?? "").trim(),
+      pldKzaj: String(x.pldKzaj ?? x.PldKzaj ?? x.PLDKZAJ ?? x.pldKZAJ ?? x.kzajCode ?? "").trim(),
     }))
     .filter(x => x.kpld);
 }
@@ -548,24 +565,32 @@ async function apiGetPld({ q = "", kpld = "" } = {}){
 async function pldLoadAll(){
   try{
     const items = await apiGetPld({ q: "" });
-    items.forEach(it => pldCache.set(String(it.kpld), it.npld ? `${it.kpld} — ${it.npld}` : String(it.kpld)));
+    items.forEach(it => {
+      const code = String(it.kpld);
+      pldCache.set(code, { ...it, labelText: buildPldInputText(it) });
+    });
     pldRenderList(items);
   } catch(e){
     err("PLD loadAll failed:", e);
     pldHideList();
   }
 }
+
 async function pldSearch(q){
   const s = (q || "").trim();
   try{
     const items = await apiGetPld({ q: s });
-    items.forEach(it => pldCache.set(String(it.kpld), it.npld ? `${it.kpld} — ${it.npld}` : String(it.kpld)));
+    items.forEach(it => {
+      const code = String(it.kpld);
+      pldCache.set(code, { ...it, labelText: buildPldInputText(it) });
+    });
     pldRenderList(items);
   } catch(e){
     err("PLD search failed:", e);
     pldHideList();
   }
 }
+
 async function pldPrefillByKpld(kpld){
   const k = String(Number(kpld) || "");
   if (!k){
@@ -574,16 +599,17 @@ async function pldPrefillByKpld(kpld){
     return;
   }
   if (pldCache.has(k)){
-    pldSet(k, pldCache.get(k));
+    const hit = pldCache.get(k);
+    pldSet(k, hit?.labelText || k);
     return;
   }
   try{
     const items = await apiGetPld({ kpld: k });
     const hit = items.find(x => String(x.kpld) === k) || items[0];
     if (hit){
-      const label = hit.npld ? `${hit.kpld} — ${hit.npld}` : String(hit.kpld);
-      pldCache.set(String(hit.kpld), label);
-      pldSet(hit.kpld, label);
+      const labelText = buildPldInputText(hit);
+      pldCache.set(k, { ...hit, labelText });
+      pldSet(hit.kpld, labelText);
       return;
     }
   } catch {}
@@ -591,40 +617,38 @@ async function pldPrefillByKpld(kpld){
     const items = await apiGetPld({ q: k });
     const hit = items.find(x => String(x.kpld) === k) || items[0];
     if (hit){
-      const label = hit.npld ? `${hit.kpld} — ${hit.npld}` : String(hit.kpld);
-      pldCache.set(String(hit.kpld), label);
-      pldSet(hit.kpld, label);
+      const labelText = buildPldInputText(hit);
+      pldCache.set(k, { ...hit, labelText });
+      pldSet(hit.kpld, labelText);
       return;
     }
   } catch(e){ err("PLD prefill failed:", e); }
   pldSet(k, k);
 }
+
 async function pldShowSelected(){
   const k = String(Number(mKpld.value || 0) || "");
   if (!k) return;
 
   if (pldCache.has(k)){
-    const label = pldCache.get(k);
-    const npld = String(label).split("—").slice(1).join("—").trim();
-    pldRenderList([{ kpld: Number(k), npld }]);
+    const hit = pldCache.get(k);
+    pldRenderList([hit]);
     return;
   }
   try{
     const items = await apiGetPld({ kpld: k });
     if (items.length){
       const hit = items.find(x => String(x.kpld) === k) || items[0];
-      pldCache.set(k, hit.npld ? `${hit.kpld} — ${hit.npld}` : String(hit.kpld));
+      const labelText = buildPldInputText(hit);
+      pldCache.set(k, { ...hit, labelText });
       pldRenderList([hit]);
       return;
     }
   } catch(e){ err("PLD showSelected failed:", e); }
-  pldRenderList([{ kpld: Number(k), npld: "" }]);
+  pldRenderList([{ kpld: Number(k), npld: "", pldObjCode:"", pldKzaj:"" }]);
 }
 
 function initPldUI(){
-
-
-  
   if (!mKpldText || !mKpldList || !mKpld) return;
 
   mKpldText.addEventListener("focus", () => {
@@ -649,7 +673,6 @@ function initPldUI(){
     }, 200);
 
     updateKpldClearVisibility();
-
   });
 
   mKpldText.addEventListener("keydown", (e) => {
@@ -696,7 +719,8 @@ function initPldUI(){
       pldHideList();
       const raw = (mKpldText.value || "").trim();
       if (raw && !mKpld.value){
-        const guess = raw.split("—")[0].trim();
+        // берем первое число (kpld) из начала строки
+        const guess = raw.match(/^\s*(\d+)\b/)?.[1] || "";
         if (/^\d+$/.test(guess)) pldPrefillByKpld(guess);
       }
     }, 120);
@@ -708,37 +732,35 @@ function initPldUI(){
     }
   });
 
-// ========================================================
-// KPLD clear button (красный крестик)
-// ========================================================
-const mKpldClear = document.getElementById("mKpldClear");
+  // ========================================================
+  // KPLD clear button (красный крестик)
+  // ========================================================
+  const mKpldClear = document.getElementById("mKpldClear");
 
-function updateKpldClearVisibility(){
-  if (!mKpldClear) return;
-  const hasValue = !!(mKpld.value || mKpldText.value.trim());
-  mKpldClear.style.display = hasValue ? "block" : "none";
-}
+  function updateKpldClearVisibility(){
+    if (!mKpldClear) return;
+    const hasValue = !!(mKpld.value || mKpldText.value.trim());
+    mKpldClear.style.display = hasValue ? "block" : "none";
+  }
 
-// 🌍 делаем доступной глобально (для outlook.paste.bundle.js)
-window.updateKpldClearVisibility = updateKpldClearVisibility;
+  // 🌍 делаем доступной глобально (для outlook.paste.bundle.js)
+  window.updateKpldClearVisibility = updateKpldClearVisibility;
 
-if (mKpldClear){
-  mKpldClear.addEventListener("click", () => {
-    // очистка
-    mKpld.value = "";
-    mKpldText.value = "";
-    pldHideList();
-
-    updateKpldClearVisibility();
-
-    // фокус назад
-    mKpldText.focus();
-  });
-}
-
+  if (mKpldClear){
+    mKpldClear.addEventListener("click", () => {
+      mKpld.value = "";
+      mKpldText.value = "";
+      pldHideList();
+      updateKpldClearVisibility();
+      mKpldText.focus();
+    });
+  }
 }
 initPldUI();
 
+// ========================================================
+// [ДАЛЕЕ] — всё остальное без изменений
+// ========================================================
 
 // ========================================================
 // [БЛОК 10] API ВЫЗОВЫ (LIST/SKD/CREATE/UPDATE/DELETE)
@@ -789,7 +811,7 @@ function parseIsoDateTime(s){
   return isNaN(d.getTime()) ? null : d;
 }
 async function apiGetSkd(dateFrom, dateTo){
-    const params = withAuthParams({ dateFrom, dateTo });
+  const params = withAuthParams({ dateFrom, dateTo });
   const url = `${API_SKD_URL}?${params.toString()}`;
   log("API SKD ->", url);
 
@@ -846,12 +868,10 @@ function skdIntervalsToMarkerEvents(items){
 
 // CREATE
 async function apiCreateJob(payload){
- 
-
   const params = withAuthParams(new URLSearchParams());
   const url = `${API_CREATE_URL}?${params.toString()}`;
 
-   log("API CREATE ->", url, payload);
+  log("API CREATE ->", url, payload);
 
   let resp;
   try{
@@ -880,7 +900,6 @@ async function apiCreateJob(payload){
 
 // UPDATE
 async function apiUpdateJob(payload){
-
   const params = withAuthParams(new URLSearchParams());
   const url = `${API_UPDATE_URL}?${params.toString()}`;
 
@@ -912,8 +931,7 @@ async function apiUpdateJob(payload){
 
 // DELETE
 async function apiDeleteJob(id){
-
- const params = withAuthParams({ Id: String(id) });
+  const params = withAuthParams({ Id: String(id) });
   const url = `${API_DELETE_URL}?${params.toString()}`;
 
   log("API DELETE ->", url);
@@ -938,15 +956,9 @@ async function apiDeleteJob(id){
   return true;
 }
 
-
 // ========================================================
 // [БЛОК 11] ЕДИНАЯ МОДЕЛЬ СОБЫТИЯ (model) + МАППИНГИ
 // ========================================================
-// Вся оптимизация здесь:
-// - buildTitle() одна на всё
-// - modelFromJob / modelFromEvent / applyModelToEvent / payloadFromModel
-// - ошибки/служебные props единообразны
-
 function buildTitle(model){
   return `<span class="ev-obj-code">${String(model.objCode||"")}</span> ` +
          `<span class="ev-kzaj-code">${String(model.kzajCode||"")}</span> ` +
@@ -980,7 +992,7 @@ function modelFromJob(job){
     kpld: Number(job.kpld || 0) || 0,
     objCode: String(job.objCode || ""),
     kzajCode: String(job.kzajCode || ""),
-    placeWork: String(job.placeWork || "").trim(),   // ✅ ADD
+    placeWork: String(job.placeWork || "").trim(),
     description: String(job.description || ""),
     errors: ensureErrorProps({})
   };
@@ -995,7 +1007,7 @@ function modelFromEvent(ev){
     kpld: Number(ep.kpld || 0) || 0,
     objCode: String(ep.objCode || ""),
     kzajCode: String(ep.kzajCode || ""),
-     placeWork: String(ep.placeWork || "").trim(),    // ✅ ADD
+    placeWork: String(ep.placeWork || "").trim(),
     description: String(ep.description || ""),
     errors: ensureErrorProps(ep),
     __pending_create: !!ep.__pending_create
@@ -1012,11 +1024,10 @@ function payloadFromModel(m){
     description: String(m.description || ""),
     objCode: String(m.objCode || ""),
     kzajCode: String(m.kzajCode || ""),
-     placeWork: String(m.placeWork || "").trim() 
+    placeWork: String(m.placeWork || "").trim()
   };
 }
 
-// Единственный способ записать "модель" в Event (без дублирования)
 function applyModelToEvent(ev, m){
   ev.setStart(m.start);
   ev.setEnd(m.end);
@@ -1026,9 +1037,8 @@ function applyModelToEvent(ev, m){
   ev.setExtendedProp("objCode", String(m.objCode || ""));
   ev.setExtendedProp("kzajCode", String(m.kzajCode || ""));
   ev.setExtendedProp("description", String(m.description || ""));
-  ev.setExtendedProp("placeWork", String(m.placeWork || "").trim()); // ✅ ADD
+  ev.setExtendedProp("placeWork", String(m.placeWork || "").trim());
 
-  // ошибки оставляем как есть (если вдруг есть)
   const e = m.errors || {};
   ev.setExtendedProp("__create_error", e.__create_error || "");
   ev.setExtendedProp("__create_error_short", e.__create_error_short || "");
@@ -1049,7 +1059,7 @@ function modelToEventInput(m){
       objCode: String(m.objCode || ""),
       kzajCode: String(m.kzajCode || ""),
       description: String(m.description || ""),
-       placeWork: String(m.placeWork || "").trim(),   // ✅ ADD
+      placeWork: String(m.placeWork || "").trim(),
       ...ensureErrorProps(m.errors || {})
     }
   };
@@ -1058,7 +1068,6 @@ function modelToEventInput(m){
 function jobToEvent(job){
   return modelToEventInput(modelFromJob(job));
 }
-
 
 // ========================================================
 // [БЛОК 12] МОДАЛКА (открыть/закрыть/валидация/preview)
@@ -1079,9 +1088,7 @@ function openModal(mode, payload){
 
   if (mode === "edit"){
     currentEvent = payload.event;
-     // ✅ подсветить редактируемую запись
     setEditActive(currentEvent?.id);
-
     pendingCreate = null;
 
     fillModalWhen(currentEvent.start, currentEvent.end);
@@ -1099,7 +1106,7 @@ function openModal(mode, payload){
     const upd = currentEvent.extendedProps?.__update_error || "";
     const del = currentEvent.extendedProps?.__delete_error || "";
     const text = payload?.errorText || del || upd || "";
-    // ✅ placeWork from event (edit)
+
     if (mPlaceWork){
       const pw = String(currentEvent.extendedProps?.placeWork || "").trim();
       mPlaceWork.value = pw || "";
@@ -1108,20 +1115,15 @@ function openModal(mode, payload){
     setModalError(text ? ("⚠️ " + text) : "");
 
   } else {
-
-
-    // ✅ placeWork for CREATE: payload wins, else localStorage, else default
-if (mPlaceWork){
-  const fromPayload = String(payload?.placeWork || "").trim();
-  const last = getLastPlaceWork();
-  mPlaceWork.value = (fromPayload || last || "");
-}
+    if (mPlaceWork){
+      const fromPayload = String(payload?.placeWork || "").trim();
+      const last = getLastPlaceWork();
+      mPlaceWork.value = (fromPayload || last || "");
+    }
 
     currentEvent = null;
     pendingCreate = payload;
-      // create — подсветка не нужна
     clearEditActive();
-
 
     fillModalWhen(pendingCreate.start, pendingCreate.end);
 
@@ -1140,13 +1142,11 @@ if (mPlaceWork){
 
   backdrop.style.display = "flex";
   backdrop.setAttribute("aria-hidden","false");
-  updateKpldClearVisibility();
+  window.updateKpldClearVisibility?.();
   setTimeout(() => mDescription.focus(), 0);
 }
 
 function closeModal(){
-
-   // ✅ при закрытии модалки снимаем подсветку редактируемой записи
   clearEditActive();
 
   backdrop.style.display = "none";
@@ -1184,7 +1184,6 @@ function refreshWhenPreview(){
 [mDate, mFrom, mTo].forEach(el => el.addEventListener("change", refreshWhenPreview));
 [mFrom, mTo].forEach(el => el.addEventListener("input", refreshWhenPreview));
 
-
 // ========================================================
 // [БЛОК 13] CONFIRM DELETE (вторая модалка подтверждения)
 // ========================================================
@@ -1217,17 +1216,11 @@ function confirmDelete(){
 // [БЛОК 13.5] AUTH: инициализация БЕЗ зависимости от widget (чтобы не было TDZ)
 // ========================================================
 let auth = null;
-
-// временный setter — пока widget ещё не создан
 let _setLoginBtnText = (text) => { /* noop */ };
 
-// init auth раньше календаря (иначе onRangeChanged упадёт на auth)
 auth = ERPAuth.init({
-  apiBase: "https://webclient.it-enterprise.com",   // ✅ ДОДАТИ
-  // тут НЕ трогаем widget напрямую!
+  apiBase: "https://webclient.it-enterprise.com",
   setButtonText: (text) => _setLoginBtnText(text),
-
-
 
   confirmLogout: async () => {
     return await uiConfirm({
@@ -1238,20 +1231,15 @@ auth = ERPAuth.init({
     });
   },
 
-onLoginChanged: async ({ isLoggedIn }) => {
-  if (!isLoggedIn){
-    // ✅ logout: просто очищаємо календар і ховаємо помилки
-    setEventsSafe([]);
-    hideLoadError();
-    return;
+  onLoginChanged: async ({ isLoggedIn }) => {
+    if (!isLoggedIn){
+      setEventsSafe([]);
+      hideLoadError();
+      return;
+    }
+    await reloadCalendarData("login");
   }
-
-  // ✅ login: перечитуємо дані
-  await reloadCalendarData("login");
-}
 });
-
-
 
 // ========================================================
 // [БЛОК 13.6] SAFE widget.setEvents (щоб не падало на datesSet під час init)
@@ -1263,10 +1251,9 @@ function setEventsSafe(events){
   if (widgetRef){
     widgetRef.setEvents(events);
   } else {
-    pendingEventsToSet = events; // буде застосовано після init
+    pendingEventsToSet = events;
   }
 }
-
 
 // ========================================================
 // [БЛОК 14] КАЛЕНДАРЬ: ИНИЦИАЛИЗАЦИЯ + ХУКИ
@@ -1274,30 +1261,27 @@ function setEventsSafe(events){
 const widget = new ERPDayCalendar("#calendar", {
   ctx: { el: ctx, hintEl: ctxHint, btnCreate: ctxCreate, btnClear: ctxClear },
 
-  // При смене диапазона: грузим LIST + SKD, строим события
   onRangeChanged: async ({ from, to }) => {
     showPageSpinner("datesSet");
-    try {
-// 🚫 НЕ залогінений → пустий календар (і без СКД)
-if (!auth.isLoggedIn()){
-  setEventsSafe([]);     // ✅ замість widget.setEvents
-  hideLoadError();
-  return;
-}
+    try{
+      if (!auth.isLoggedIn()){
+        setEventsSafe([]);
+        hideLoadError();
+        return;
+      }
 
-    // ✅ залогінений → вантажимо все
-    const [jobs, skd] = await Promise.all([
-      apiGetListJobs(from, to),
-      apiGetSkd(from, to)
-    ]);
+      const [jobs, skd] = await Promise.all([
+        apiGetListJobs(from, to),
+        apiGetSkd(from, to)
+      ]);
 
-    const events = [
-      ...jobs.map(jobToEvent),
-      ...skdIntervalsToMarkerEvents(skd)
-    ];
+      const events = [
+        ...jobs.map(jobToEvent),
+        ...skdIntervalsToMarkerEvents(skd)
+      ];
 
-   setEventsSafe(events);   // ✅ замість widget.setEvents
-    hideLoadError();
+      setEventsSafe(events);
+      hideLoadError();
 
     } catch(e){
       err("LIST+SKD failed:", e);
@@ -1308,21 +1292,18 @@ if (!auth.isLoggedIn()){
   },
 
   onLoginClick: async () => {
-  await auth.handleLoginButtonClick();
-},
+    await auth.handleLoginButtonClick();
+  },
 
-  // Запрос на создание (из контекстного меню/выделения)
   onCreateRequested: async ({ start, end }) => {
-  if (!await requireLogin()) return;
-  openModal("create", { start, end });
-},
+    if (!await requireLogin()) return;
+    openModal("create", { start, end });
+  },
 
-  // Запрос на редактирование (dblclick)
   onEditRequested: async  ({ event }) => {
     if (event.extendedProps?.__skd_marker) return;
     if (!await requireLogin()) return;
 
-    // temp event -> открываем как create (пересоздание)
     if (isTempId(event.id)){
       openModal("create", {
         start: event.start,
@@ -1343,26 +1324,22 @@ if (!auth.isLoggedIn()){
     openModal("edit", { event, errorText: del || upd || "" });
   },
 
-  // При переносе/ресайзе: делаем update
   onEventMovedOrResized: async ({ event, revert }) => {
     if (event.extendedProps?.__skd_marker) return;
 
-      // ✅ якщо не залогінений — повертаємо подію назад
-  if (!await requireLogin()){
-    revert?.();
-    return;
-  }
+    if (!await requireLogin()){
+      revert?.();
+      return;
+    }
 
     if (isTempId(event.id)) return;
     await safeUpdateEvent(event);
   },
 
-  // DOM mount для событий: спиннеры, error css, SKD labels
   onEventDidMount: (info) => {
     info.el.dataset.eventId = info.event.id;
     eventDomMap.set(info.event.id, info.el);
 
-        // ✅ если это событие сейчас редактируется — вернуть подсветку после remount
     if (editActiveEventId && info.event.id === editActiveEventId){
       info.el.classList.add("is-edit-active");
     }
@@ -1400,16 +1377,11 @@ if (!auth.isLoggedIn()){
   }
 });
 
-
-
-
 // ========================================================
-// [БЛОК 14.5] AUTH <-> WIDGET: подключаем реальную кнопку логина + обновляем текст
+// [БЛОК 14.5] AUTH <-> WIDGET
 // ========================================================
-
 widgetRef = widget;
 
-// якщо під час init datesSet вже хотів поставити події — застосуємо зараз
 if (pendingEventsToSet !== null){
   widgetRef.setEvents(pendingEventsToSet);
   pendingEventsToSet = null;
@@ -1418,22 +1390,15 @@ if (pendingEventsToSet !== null){
 _setLoginBtnText = (text) => widget.setLoginButtonText(text);
 auth.refresh();
 
-
-
 async function requireLogin(){
   if (auth.isLoggedIn()) return true;
   toast("Для роботи потрібно залогінитись.", "warn", "🔐 Потрібен вхід");
   return false;
 }
 
-
-
 const calendar = widget.getCalendar();
 
 async function reloadCalendarData(reason = ""){
-
-
-    // ✅ якщо не залогінений — не читаємо API, просто очищаємо
   if (!auth.isLoggedIn()){
     setEventsSafe([]);
     hideLoadError();
@@ -1441,22 +1406,19 @@ async function reloadCalendarData(reason = ""){
   }
 
   const view = calendar.view;
-  if (!view) return
+  if (!view) return;
 
-
-  // те саме що в erp.calendar.bundle.js: viewToRange()
   const pad2 = n => String(n).padStart(2,'0');
-  const isoDate = (d) => {
+  const isoDate2 = (d) => {
     d = new Date(d);
     return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
   };
 
-  const from = isoDate(view.activeStart);
-  const to = isoDate(new Date(view.activeEnd.getTime() - 1));
+  const from = isoDate2(view.activeStart);
+  const to = isoDate2(new Date(view.activeEnd.getTime() - 1));
 
   log("RELOAD after auth", reason, { from, to });
 
-  // викликаємо те саме завантаження, що і при datesSet
   showPageSpinner("reload auth");
   try{
     const [jobs, skd] = await Promise.all([ apiGetListJobs(from, to), apiGetSkd(from, to) ]);
@@ -1470,12 +1432,6 @@ async function reloadCalendarData(reason = ""){
     hidePageSpinner("reload auth");
   }
 }
-
-
-
-
-
-
 
 // Click: открыть модалку если есть ошибки, либо temp create
 calendar.on("eventClick", async (info) => {
@@ -1507,7 +1463,6 @@ calendar.on("eventClick", async (info) => {
   }
 });
 
-
 // ========================================================
 // [БЛОК 15] CREATE (tmp event -> API -> replace id)
 // ========================================================
@@ -1518,8 +1473,6 @@ async function createOrResubmitTempEvent(ev){
   try {
     const m = modelFromEvent(ev);
     const payload = payloadFromModel(m);
-
-    // CREATE не должен отправлять id=0? (у тебя API принимает без id)
     delete payload.id;
 
     const res = await apiCreateJob(payload);
@@ -1527,22 +1480,18 @@ async function createOrResubmitTempEvent(ev){
     stopSaving(ev.id, "submit tmp done");
     savingIds.add(res.id);
 
-    // Снимок модели, чтобы не потерять значения
     const snapshot = modelFromEvent(ev);
     snapshot.id = res.id;
     snapshot.objCode = res.objCode || snapshot.objCode;
     snapshot.kzajCode = res.kzajCode || snapshot.kzajCode;
 
-    // очистим temp-only props
     const ep = { ...(ev.extendedProps || {}) };
     scrubTempProps(ep);
     snapshot.errors.__create_error = "";
     snapshot.errors.__create_error_short = "";
 
-    // удаляем temp event
     ev.remove();
 
-    // создаём новое событие с server id
     const created = calendar.addEvent(modelToEventInput(snapshot));
     requestAnimationFrame(() => stopSaving(created.id, "create done"));
 
@@ -1581,9 +1530,8 @@ async function createJobFromModal(model){
   return await createOrResubmitTempEvent(ev);
 }
 
-
 // ========================================================
-// [БЛОК 16] UPDATE / DELETE (без дублирования model/payload)
+// [БЛОК 16] UPDATE / DELETE
 // ========================================================
 async function safeUpdateEvent(event){
   const id = event.id;
@@ -1597,7 +1545,6 @@ async function safeUpdateEvent(event){
 
     const res = await apiUpdateJob(payload);
 
-    // применяем то, что вернул сервер (objCode/kzajCode)
     if (res && (res.objCode || res.kzajCode)){
       m.objCode = String(res.objCode || m.objCode || "");
       m.kzajCode = String(res.kzajCode || m.kzajCode || "");
@@ -1611,9 +1558,7 @@ async function safeUpdateEvent(event){
   } catch(e){
     applyUpdateErrorText(event, e);
     err("UPDATE failed:", e);
-    // ✅ не бросаем (чтобы не было revert и не терялись ошибки)
     return {};
-
   } finally {
     stopSaving(id, "update done");
   }
@@ -1640,60 +1585,53 @@ async function safeDeleteEvent(event){
   }
 }
 
-
 // ========================================================
-// [БЛОК 17] SAVE / DELETE В МОДАЛКЕ (единая сборка модели)
+// [БЛОК 17] SAVE / DELETE В МОДАЛКЕ
 // ========================================================
 mSave.onclick = async () => {
-   if (!await requireLogin()) return;
+  if (!await requireLogin()) return;
 
   const description = mDescription.value.trim();
 
-  // KPLD обязателен
   const kpldVal = Number(mKpld.value || 0) || 0;
-if (!kpldVal){
- toast("Оберіть код роботи (KPLD) зі списку.", "warn", "Перевірка даних");
-  mKpldText?.focus();
-  return;
-}
-
+  if (!kpldVal){
+    toast("Оберіть код роботи (KPLD) зі списку.", "warn", "Перевірка даних");
+    mKpldText?.focus();
+    return;
+  }
 
   const parsed = getStartEndFromModal();
   if (!parsed.ok){
-  toast(parsed.error, "warn", "Перевірка дати/часу");
-  return;
-}
+    toast(parsed.error, "warn", "Перевірка дати/часу");
+    return;
+  }
 
-const placeWorkVal = (mPlaceWork?.value || "").trim();
+  const placeWorkVal = (mPlaceWork?.value || "").trim();
 
-  // Единая модель из модалки
   const modalModel = {
-    id: "", // пока неизвестно
+    id: "",
     start: parsed.start,
     end: parsed.end,
     kpld: kpldVal,
     placeWork: placeWorkVal,
-    objCode: "",   // для create пусто, для edit берём из event
-    kzajCode: "",  // для create пусто, для edit берём из event
+    objCode: "",
+    kzajCode: "",
     description,
     errors: ensureErrorProps({})
   };
 
   if (modalMode === "create"){
+    setLastPlaceWork(placeWorkVal);
 
-    setLastPlaceWork(placeWorkVal); // ✅ remember last choice for next CREATE
-
-    // Если это пересоздание temp event — обновляем один раз через applyModelToEvent
     if (pendingCreate?.existingTempEvent){
       const ev = pendingCreate.existingTempEvent;
       const m = modelFromEvent(ev);
 
-      // переносим в модель значения с модалки
       m.start = modalModel.start;
       m.end = modalModel.end;
       m.kpld = modalModel.kpld;
       m.description = modalModel.description;
-      m.placeWork = modalModel.placeWork; 
+      m.placeWork = modalModel.placeWork;
 
       applyModelToEvent(ev, m);
 
@@ -1715,19 +1653,15 @@ const placeWorkVal = (mPlaceWork?.value || "").trim();
     const ev = currentEvent;
     const m = modelFromEvent(ev);
 
-    // переносим в модель значения с модалки
     m.start = modalModel.start;
     m.end = modalModel.end;
     m.kpld = modalModel.kpld;
     m.description = modalModel.description;
-    m.placeWork = modalModel.placeWork; // ✅ ADD
+    m.placeWork = modalModel.placeWork;
 
-    // ✅ сразу обновляем UI календаря (пользователь видит изменения моментально)
     applyModelToEvent(ev, m);
 
     closeModal();
-
-    // ✅ затем update в API (и, если сервер вернет obj/kzaj — применим)
     await safeUpdateEvent(ev);
   }
 };
@@ -1738,7 +1672,6 @@ mDelete.onclick = async () => {
   const ok = await confirmDelete();
   if (!ok) return;
 
-  // temp event: просто удаляем локально
   if (isTempId(currentEvent.id)){
     const ev = currentEvent;
     closeModal();
@@ -1752,10 +1685,9 @@ mDelete.onclick = async () => {
   try {
     await safeDeleteEvent(ev);
   } catch(e){
-    // не удалили — событие осталось с ошибкой
+    // событие осталось с ошибкой
   }
 };
-
 
 // ========================================================
 // [БЛОК 18] МЕЛОЧИ: unselect при Esc (модалка)
