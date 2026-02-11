@@ -407,10 +407,21 @@ export class ERPDayCalendar {
     // context menu logic inside calendar
     this.ctx = hooks.ctx || null;
     if (this.ctx?.el && this.ctx?.hintEl && this.ctx?.btnCreate && this.ctx?.btnClear){
-      this.el.addEventListener("contextmenu", (e) => {
-        e.preventDefault();
-        this._showCtx(e.clientX, e.clientY);
-      });
+this.el.addEventListener("contextmenu", (e) => {
+  // ✅ ПКМ по событию не трогаем вообще
+  if (e.target.closest(".fc-event")) return;
+
+  // ✅ меню только по слотам/сетке
+  const hitSlot = !!(
+    e.target.closest(".fc-timegrid-slot") ||
+    e.target.closest(".fc-timegrid-slot-lane") ||
+    e.target.closest(".fc-timegrid-col")
+  );
+  if (!hitSlot) return;
+
+  e.preventDefault();
+  this._showCtx(e.clientX, e.clientY);
+});
 
       document.addEventListener("mousedown", (e) => {
         if (this.ctx.el.style.display === "block" && !this.ctx.el.contains(e.target)) this._hideCtx();

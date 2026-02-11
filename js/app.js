@@ -304,6 +304,34 @@ function findEventEl(eventId){
 // ========================================================
 let editActiveEventId = null;
 
+
+function setEditActive(eventId){
+  // снять со старого
+  if (editActiveEventId){
+    const oldEl = findEventEl(editActiveEventId);
+    if (oldEl) oldEl.classList.remove("is-edit-active");
+  }
+
+  editActiveEventId = eventId || null;
+  if (!editActiveEventId) return;
+
+  // попытка №1: прямо сейчас
+  const apply = () => {
+    const el = findEventEl(editActiveEventId);
+    if (el) el.classList.add("is-edit-active");
+  };
+
+  apply();
+
+  // попытка №2: в следующий кадр (когда FC уже дорисовал DOM)
+  requestAnimationFrame(apply);
+
+  // попытка №3: ещё один кадр (на случай перемонта после спиннера/рендера)
+  requestAnimationFrame(() => requestAnimationFrame(apply));
+}
+
+
+/*
 function setEditActive(eventId){
   if (editActiveEventId){
     const oldEl = findEventEl(editActiveEventId);
@@ -315,6 +343,8 @@ function setEditActive(eventId){
     if (el) el.classList.add("is-edit-active");
   }
 }
+  */
+
 function clearEditActive(){
   setEditActive(null);
 }
@@ -1147,7 +1177,6 @@ function openModal(mode, payload){
 }
 
 function closeModal(){
-  clearEditActive();
 
   backdrop.style.display = "none";
   backdrop.setAttribute("aria-hidden","true");
@@ -1437,6 +1466,8 @@ async function reloadCalendarData(reason = ""){
 calendar.on("eventClick", async (info) => {
   info.jsEvent.preventDefault();
   const ev = info.event;
+   // ✅ 1 клик = выделили
+  setEditActive(ev.id);
 
   if (ev.extendedProps?.__skd_marker) return;
 
@@ -1493,6 +1524,9 @@ async function createOrResubmitTempEvent(ev){
     ev.remove();
 
     const created = calendar.addEvent(modelToEventInput(snapshot));
+    // ✅ перенести подсветку на "реальный" event
+    setEditActive(created.id);
+
     requestAnimationFrame(() => stopSaving(created.id, "create done"));
 
     return created.id;
@@ -1526,6 +1560,9 @@ async function createJobFromModal(model){
       __create_error_short: ""
     }
   });
+
+  // ✅ СРАЗУ делаем ярко-синим (не ждём API)
+  setEditActive(ev.id);
 
   return await createOrResubmitTempEvent(ev);
 }
@@ -1637,13 +1674,15 @@ mSave.onclick = async () => {
 
       closeModal();
       widget.unselect();
-      await createOrResubmitTempEvent(ev);
+      const newId = await createOrResubmitTempEvent(ev);
+      if (newId) setEditActive(newId);
       return;
     }
 
     closeModal();
     widget.unselect();
-    await createJobFromModal(modalModel);
+    const newId = await createJobFromModal(modalModel);
+    if (newId) setEditActive(newId);
     return;
   }
 
