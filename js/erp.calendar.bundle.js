@@ -178,15 +178,7 @@ const CALENDAR_CSS = `
   pointer-events: none;
 }
 
-/* 🔄 Refresh button — акуратна, без великого фону */
-.fc .fc-erpRefresh-button{
-  background: transparent !important;
-  border: none !important;
-  box-shadow: none !important;
-  padding: 0 6px !important;
-  font-size: 18px;
-  color: #334155 !important;
-}
+
 
 
 
@@ -234,8 +226,8 @@ const CALENDAR_CSS = `
 }
 
 .fc .fc-erpRefresh-button .erp-refresh-text{
-  font-weight: 800;       /* як UserName у "Вітаємо" */
-  color: #111;
+  font-weight: 600;       /* як UserName у "Вітаємо" */
+  __color: #111;
 }
 
 
