@@ -210,7 +210,6 @@ export const ERPAuth = (() => {
           dom.ok.disabled = true;
           dom.cancel.disabled = true;
 
-
           // 🔽 ЗАТРИМКА
 //await new Promise(r => setTimeout(r, 8000));
 

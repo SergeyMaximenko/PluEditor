@@ -36,6 +36,7 @@ export function uiConfirm(opts = {}){
       resolve(result);
     };
 
+    
     ok.onclick = () => cleanup(true);
     cancel.onclick = () => cleanup(false);
 
