@@ -1931,6 +1931,7 @@ if (modalMode === "create" || modalMode === "edit") {
 
     applyModelToEvent(ev, m);
 
+    
     closeModal();
     gotoDateIfOutOfRange(m.start);
 

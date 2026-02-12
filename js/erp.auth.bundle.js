@@ -200,6 +200,7 @@ export const ERPAuth = (() => {
         try{
           setLoginError(dom, "");
 
+          
           const login = s(dom.user?.value).trim();
           const pass  = s(dom.pass?.value).trim();
 

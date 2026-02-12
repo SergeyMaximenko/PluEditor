@@ -172,6 +172,7 @@ const CALENDAR_CSS = `
 }
 
 
+
 /* ===== Colored codes inside event title ===== */
 .fc .ev-obj-code{
   color: #0000ff;

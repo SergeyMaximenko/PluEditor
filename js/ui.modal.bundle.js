@@ -10,6 +10,7 @@ export function uiConfirm(opts = {}){
   const okText = String(opts.okText ?? "OK");
   const cancelText = String(opts.cancelText ?? "Скасувати");
 
+  
   const b = document.getElementById("uiConfirmBackdrop");
   const t = document.getElementById("uiConfirmTitle");
   const tx = document.getElementById("uiConfirmText");
