@@ -2,7 +2,7 @@
 // "ЗОЛОТОЙ" файл: FullCalendar + календарные стили + выделение/контекст-меню/drag-unselect.
 // В app.js остаются только модалка + REST + спинеры.
 
-const STYLE_ID = "erp-calendar-style-v4";
+const STYLE_ID = "erp-calendar-style-v5";
 
 function injectCalendarCssOnce(cssText){
   if (document.getElementById(STYLE_ID)) return;
@@ -78,6 +78,34 @@ const CALENDAR_CSS = `
   color: #111 !important;
   pointer-events: none !important;
 }
+
+
+/* ===== FIX: when dragging/resizing an EXISTING event, mirror must look like "active" =====
+   FullCalendar adds fc-event-dragging / fc-event-resizing during interaction.
+   We override yellow mirror with active-blue styles only in those states.
+*/
+.fc .fc-event.fc-event-mirror.fc-event-dragging,
+.fc .fc-event.fc-event-mirror.fc-event-resizing,
+.fc .fc-timegrid-event.fc-event-mirror.fc-event-dragging,
+.fc .fc-timegrid-event.fc-event-mirror.fc-event-resizing,
+.fc .fc-timegrid-event.fc-mirror.fc-event-dragging,
+.fc .fc-timegrid-event.fc-mirror.fc-event-resizing{
+  background: rgba(26, 115, 232, .22) !important;
+  border: 1px solid rgba(26, 115, 232, .95) !important;
+  color: rgba(0,0,0,.92) !important;
+}
+.fc .fc-event.fc-event-mirror.fc-event-dragging::before,
+.fc .fc-event.fc-event-mirror.fc-event-resizing::before,
+.fc .fc-timegrid-event.fc-event-mirror.fc-event-dragging::before,
+.fc .fc-timegrid-event.fc-event-mirror.fc-event-resizing::before,
+.fc .fc-timegrid-event.fc-mirror.fc-event-dragging::before,
+.fc .fc-timegrid-event.fc-mirror.fc-event-resizing::before{
+  display: none !important;
+}
+
+
+
+
 .fc .fc-timegrid-event.fc-event-mirror::before,
 .fc .fc-timegrid-event.fc-mirror::before{
   display: none !important;
@@ -88,72 +116,42 @@ const CALENDAR_CSS = `
   color: rgba(0,0,0,.85) !important;
 }
 
-/* FullCalendar добавляет " - " после времени — убираем */
+/* FullCalendar adds " - " after time — remove */
 .fc .fc-event-time:after,
 .fc .fc-event-time::after{
   content: "" !important;
   display: none !important;
 }
 
+/* ===================== SKD (background) over works ===================== */
+/* Put background layer above events (so marker line is visible) */
+.fc .fc-timegrid-col-bg{ z-index: 6 !important; }
+.fc .fc-timegrid-event-harness{ z-index: 3 !important; }
 
-
-/* ===================== SKD (background) поверх робіт ===================== */
-
-
-/* 1) піднімаємо весь шар background над подіями */
-
-
-
-
-
-
-
-.fc .fc-timegrid-col-bg{
-  z-index: 6 !important;
-}
-.fc .fc-timegrid-event-harness{
-  z-index: 3 !important;
-}
-
-
-
-
-
-
-
-
-/* 2) сам harness для SKD поверх */
+/* Harness for SKD marker */
 .fc .fc-timegrid-bg-harness.skd-marker{
   pointer-events: none !important;
   z-index: 7 !important;
 }
 
-/* 3) робимо сам background-прямокутник прозорим, малюємо лінію */
+/* Make bg transparent; draw marker line */
 .fc .fc-timegrid-bg-harness.skd-marker > .fc-bg-event{
   background: transparent !important;
   opacity: 1 !important;
 }
-/* ЛІНІЯ — на всю ширину колонки */
 .fc .fc-timegrid-bg-harness.skd-marker::after{
   content:"";
   position:absolute;
-  left:0;
-  right:0;
-  top:0;
+  left:0; right:0; top:0;
   border-top: 2px solid var(--skd-from);
   z-index: 7;
   pointer-events: none;
 }
-
-/* ПО */
 .fc .fc-timegrid-bg-harness.skd-marker.skd-to::after{
   border-top-color: var(--skd-to);
 }
-.fc .fc-timegrid-bg-harness.skd-marker.skd-to > .fc-bg-event::after{
-  border-top-color: var(--skd-to);
-}
 
-/* 4) БЕЙДЖ — малюємо НА HARNESS (бо data-skd-label стоїть саме там) */
+/* Badge (data-skd-label is on harness) */
 .fc .fc-timegrid-bg-harness.skd-marker::before{
   content: attr(data-skd-label);
   position: absolute;
@@ -173,71 +171,35 @@ const CALENDAR_CSS = `
   color: var(--skd-to);
 }
 
-/* ✅ FIX: Лейбл в кнопці логіну — стабільний */
-.fc .fc-erpLogin-button .erp-login-label{
-  pointer-events: none;
+
+/* ===== Colored codes inside event title ===== */
+.fc .ev-obj-code{
+  color: #0000ff;
+  font-weight: 800;
+}
+.fc .ev-kzaj-code{
+  color: #00a300;
+  font-weight: 800;
+}
+.fc .ev-obj-code:empty,
+.fc .ev-kzaj-code:empty{
+  display: none;
 }
 
-
-
-
-
-
-
-/* ===== REFRESH button (як "Вітаємо") ===== */
-.fc .fc-erpRefresh-button{
-  border-radius: 12px !important;
-  padding: 6px 10px !important;
-  font-weight: 600;
-  display: inline-flex !important;
-  align-items: center !important;
-  gap: 10px !important;
-  white-space: nowrap !important;
-
-  background: #f8fafc !important;
-  border: 1px solid rgba(0,0,0,.12) !important;
-  color: #111 !important;
-
-  transition: background .15s ease;
+.fc .ev-obj-code,
+.fc .ev-kzaj-code{
+  display: inline-block;
+  margin-right: 2px;
 }
-
-.fc .fc-erpRefresh-button:hover{
-  background: #eef2f7 !important;
-}
-
-.fc .fc-erpRefresh-button:focus,
-.fc .fc-erpRefresh-button:focus-visible{
-  outline: none !important;
-  box-shadow: none !important;
-}
-
-.fc .fc-erpRefresh-button .erp-refresh-label{
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  pointer-events: none; /* щоб клік працював по всій кнопці */
-}
-
-.fc .fc-erpRefresh-button .erp-refresh-ico{
-  font-weight: 900;
-  color: rgba(0,0,0,.70);
-  font-size: 16px;
-  line-height: 1;
-}
-
-.fc .fc-erpRefresh-button .erp-refresh-text{
-  font-weight: 600;       /* як UserName у "Вітаємо" */
-  __color: #111;
-}
-
-
-
 
 `;
 
-function pad2(n){ return String(n).padStart(2,'0'); }
+function pad2(n){ return String(n).padStart(2,"0"); }
 function fmtTime(d){ d = new Date(d); return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`; }
 
+function minutesDiff(a,b){
+  return Math.round((b.getTime()-a.getTime())/60000);
+}
 function durationUaShort(totalMinutes){
   totalMinutes = Math.max(0, Math.round(totalMinutes || 0));
   const h = Math.floor(totalMinutes / 60);
@@ -245,10 +207,6 @@ function durationUaShort(totalMinutes){
   if (h > 0 && m > 0) return `${h} год ${m} хв`;
   if (h > 0) return `${h} год`;
   return `${m} хв`;
-}
-
-function minutesDiff(a,b){
-  return Math.round((b.getTime()-a.getTime())/60000);
 }
 
 function isoDate(d){
@@ -269,7 +227,6 @@ function viewToRange(view){
   return { from, to };
 }
 
-
 export class ERPDayCalendar {
   constructor(target, hooks = {}){
     injectCalendarCssOnce(CALENDAR_CSS);
@@ -279,11 +236,9 @@ export class ERPDayCalendar {
 
     this.hooks = hooks;
 
-    // selection state inside calendar
     this.selection = null;
     this.lastSelection = null;
 
-    // ✅ FIX: стабільний текст кнопки логіну (не залежить від DOM)
     this._loginBtnText = "Логін";
 
     this.calendar = new FullCalendar.Calendar(this.el, {
@@ -306,31 +261,36 @@ export class ERPDayCalendar {
       firstDay: 1,
       locale: "uk",
 
-      headerToolbar: { left: "erpRefresh,prev,next today,timeGridDay,timeGridWeek", center: "title", right: "erpLogin" },
+      headerToolbar: {
+        left: "erpRefresh,prev,next today,timeGridDay,timeGridWeek",
+        center: "title",
+        right: "erpLogin"
+      },
 
       customButtons: {
         erpRefresh: {
-    text: "↻ Оновити",
-    click: () => { this.hooks.onRefreshClick?.({ calendar: this.calendar }); }
-  },
+          text: "↻ Оновити",
+          click: () => { this.hooks.onRefreshClick?.({ calendar: this.calendar }); }
+        },
         erpLogin: {
           text: "",
           click: () => { this.hooks.onLoginClick?.({ calendar: this.calendar }); }
         }
       },
 
-viewDidMount: () => { 
-  this._syncRefreshButtonDom();
-  this._syncLoginButtonDom(); 
-},
-datesSet: async (arg) => {
-  this._syncRefreshButtonDom();
-  this._syncLoginButtonDom();
-  const { from, to } = viewToRange(arg.view);
-  if (this.hooks.onRangeChanged) {
-    await this.hooks.onRangeChanged({ from, to, view: arg.view, calendar: this.calendar });
-  }
-},
+      viewDidMount: () => {
+        this._syncRefreshButtonDom();
+        this._syncLoginButtonDom();
+      },
+
+      datesSet: async (arg) => {
+        this._syncRefreshButtonDom();
+        this._syncLoginButtonDom();
+        const { from, to } = viewToRange(arg.view);
+        if (this.hooks.onRangeChanged) {
+          await this.hooks.onRangeChanged({ from, to, view: arg.view, calendar: this.calendar });
+        }
+      },
 
       slotLaneClassNames: (arg) => {
         const d = arg.date;
@@ -390,21 +350,7 @@ datesSet: async (arg) => {
       },
 
       eventDidMount: (info) => {
-
-        info.el.addEventListener("mousedown", (e) => {
-  if (e.button === 2) { // ПКМ
-    e.preventDefault();
-    info.el.blur();
-  }
-});
-
-        info.el.addEventListener("contextmenu", (e) => {
-  e.preventDefault();
-  e.stopPropagation();
-  if (typeof e.stopImmediatePropagation === "function") e.stopImmediatePropagation();
-}, true);
-
-
+        // dblclick edit
         info.el.addEventListener("dblclick", (e) => {
           e.preventDefault();
           const id = info.event.id;
@@ -448,10 +394,12 @@ datesSet: async (arg) => {
         this.hooks.onEventWillUnmount?.(info);
       },
 
+      // IMPORTANT: no default click behaviour here
       eventClick: (info) => { info.jsEvent.preventDefault(); }
     });
 
     this.calendar.render();
+    this._syncRefreshButtonDom();
     this._syncLoginButtonDom();
 
     // unselect only on real drag start
@@ -490,22 +438,34 @@ datesSet: async (arg) => {
 
     // context menu logic inside calendar
     this.ctx = hooks.ctx || null;
+
+    // ✅ Global PKM intercept: do not focus/select event, always show our ctx menu
+    this.el.addEventListener("pointerdown", (e) => {
+      if (e.button !== 2) return;
+      // if right-click is inside calendar -> prevent any browser/FC behaviour early
+      const inside = !!e.target.closest("#calendar, .fc");
+      if (!inside) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+      if (typeof e.stopImmediatePropagation === "function") e.stopImmediatePropagation();
+
+      // also blur event element to avoid grey highlight in some browsers
+      const evEl = e.target.closest(".fc-event");
+      if (evEl && typeof evEl.blur === "function") evEl.blur();
+    }, true);
+
     if (this.ctx?.el && this.ctx?.hintEl && this.ctx?.btnCreate && this.ctx?.btnClear){
-this.el.addEventListener("contextmenu", (e) => {
-  // ✅ Всегда показываем наш диалог и никогда не даём FC/браузеру выделять событие
-  const insideCalendar = !!e.target.closest("#calendar, .fc");
-  if (!insideCalendar) return;
+      this.el.addEventListener("contextmenu", (e) => {
+        const insideCalendar = !!e.target.closest("#calendar, .fc");
+        if (!insideCalendar) return;
 
-  // 🔥 гасим браузерное меню + гасим обработчики FullCalendar
-  e.preventDefault();
-  e.stopPropagation();
-  if (typeof e.stopImmediatePropagation === "function") e.stopImmediatePropagation();
+        e.preventDefault();
+        e.stopPropagation();
+        if (typeof e.stopImmediatePropagation === "function") e.stopImmediatePropagation();
 
-  // (опционально) если ПКМ по событию — НЕ делаем выделение, НЕ открываем модалку, просто показываем меню
-  this._showCtx(e.clientX, e.clientY);
-}, true); // ✅ важно: CAPTURE, чтобы перехватить раньше FC
-
-
+        this._showCtx(e.clientX, e.clientY);
+      }, true); // CAPTURE is важен
 
       document.addEventListener("mousedown", (e) => {
         if (this.ctx.el.style.display === "block" && !this.ctx.el.contains(e.target)) this._hideCtx();
@@ -530,9 +490,8 @@ this.el.addEventListener("contextmenu", (e) => {
         this.hooks.onCreateRequested?.({ start: sel.start, end: sel.end, calendar: this.calendar });
       };
     }
-  } // ✅ constructor end
+  } // constructor end
 
-  // ✅ default selection (если ничего не выделено)
   _getDefaultCreateSelection(){
     const base = new Date(this.calendar.getDate());
     const now = new Date();
@@ -548,28 +507,24 @@ this.el.addEventListener("contextmenu", (e) => {
     return { start, end };
   }
 
+  _syncRefreshButtonDom(){
+    const btn = this.el.querySelector(".fc-erpRefresh-button");
+    if (!btn) return;
 
-_syncRefreshButtonDom(){
-  const btn = this.el.querySelector(".fc-erpRefresh-button");
-  if (!btn) return;
-
-  // робимо як у login: чистимо і збираємо контент
-  btn.textContent = "";
-  btn.innerHTML = `
-    <span class="erp-refresh-label">
-      <span class="erp-refresh-ico">↻</span>
-      <span class="erp-refresh-text">Оновити</span>
-    </span>
-  `;
-}
+    btn.textContent = "";
+    btn.innerHTML = `
+      <span class="erp-refresh-label">
+        <span class="erp-refresh-ico">↻</span>
+        <span class="erp-refresh-text">Оновити</span>
+      </span>
+    `;
+  }
 
   _syncLoginButtonDom(){
-
     const btn = this.el.querySelector(".fc-erpLogin-button");
     if (!btn) return;
 
     const t = String(this._loginBtnText || "Логін").trim();
-
     const isLoggedIn = /^Вітаємо\s+/i.test(t);
     btn.classList.toggle("is-logged-out", !isLoggedIn);
 
@@ -618,17 +573,19 @@ _syncRefreshButtonDom(){
     const { el, hintEl, btnCreate } = this.ctx;
 
     const sel = this.selection || this.lastSelection || this._getDefaultCreateSelection();
-
     hintEl.textContent = `${fmtTime(sel.start)}–${fmtTime(sel.end)}`;
+
     btnCreate.disabled = false;
     btnCreate.style.opacity = "1";
 
     const margin = 8;
     el.style.display = "block";
     const rect = el.getBoundingClientRect();
+
     let left = x, top = y;
     if (left + rect.width > window.innerWidth - margin) left = window.innerWidth - rect.width - margin;
     if (top + rect.height > window.innerHeight - margin) top = window.innerHeight - rect.height - margin;
+
     el.style.left = `${left}px`;
     el.style.top = `${top}px`;
   }
@@ -648,7 +605,7 @@ _syncRefreshButtonDom(){
   setEvents(events){
     this.calendar.batchRendering(() => {
       this.calendar.getEvents().forEach(e => e.remove());
-      events.forEach(e => this.calendar.addEvent(e));
+      (events || []).forEach(e => this.calendar.addEvent(e));
     });
   }
 
@@ -658,4 +615,3 @@ _syncRefreshButtonDom(){
     this._hideCtx();
   }
 }
-

@@ -1,10 +1,8 @@
-// /js/app.js
 // ========================================================
-//  ERP Day Calendar — app.js
-//  ✅ Оптимизировано: единая модель события (model),
-//     единые функции model<->event<->payload,
-//     единая сборка title, единая обработка create/update/delete.
-//  ✅ Разбито на большие блоки + комментарии на русском.
+// ERP Day Calendar — app.js (PROD refactor)
+// - единый loader LIST+SKD
+// - единый маппинг ошибок сети
+// - убраны дубли onRefreshClick / mCancel.onclick / глобалки
 // ========================================================
 
 import { ERPDayCalendar } from "./erp.calendar.bundle.js";
@@ -13,14 +11,14 @@ import { ERPAuth } from "./erp.auth.bundle.js";
 import { uiConfirm } from "./ui.modal.bundle.js";
 
 // ========================================================
-// [БЛОК 1] ЛОГИ
+// [1] LOG
 // ========================================================
 const LOG_PREFIX = "[ERP-Cal]";
 function log(...args){ console.log(LOG_PREFIX, ...args); }
 function err(...args){ console.error(LOG_PREFIX, ...args); }
 
 // ========================================================
-// [БЛОК 2] УТИЛИТЫ ДАТ/ВРЕМЕНИ/ПРОВЕРОК
+// [2] Utils date/time
 // ========================================================
 const pad2 = n => String(n).padStart(2,'0');
 function fmtTime(d){ d = new Date(d); return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`; }
@@ -70,7 +68,6 @@ function formatWhenWithDuration(start, end){
   const dur = durationUaShort(minutesDiff(start, end));
   return `${fmtDate(start)}  ${fmtTime(start)}–${fmtTime(end)} (${dur})`;
 }
-
 function genGuid(){
   if (crypto && crypto.randomUUID) return crypto.randomUUID();
   const s4 = () => Math.floor((1+Math.random())*0x10000).toString(16).substring(1);
@@ -87,7 +84,6 @@ function shortErr(msg, max=120){
   if (msg.length <= max) return msg;
   return msg.slice(0, max-1) + "…";
 }
-
 function escapeHtml(str){
   return String(str ?? "")
     .replaceAll("&", "&amp;")
@@ -97,6 +93,9 @@ function escapeHtml(str){
     .replaceAll("'", "&#039;");
 }
 
+// ========================================================
+// [3] Toast (единый)
+// ========================================================
 function toast(message, type="error", title="Повідомлення", ms=4500){
   const el = document.createElement("div");
   el.className = `erp-toast ${type}`;
@@ -122,10 +121,9 @@ function toast(message, type="error", title="Повідомлення", ms=4500)
 }
 
 // ========================================================
-// PlaceWork: persist last choice (safe)
+// PlaceWork: persist last choice
 // ========================================================
 const LS_PLACEWORK_KEY = "erp_cal_last_placeWork_v1";
-
 function getLastPlaceWork(){
   try{
     const v = localStorage.getItem(LS_PLACEWORK_KEY);
@@ -133,13 +131,13 @@ function getLastPlaceWork(){
   }catch{ return ""; }
 }
 function setLastPlaceWork(v){
-  try{
-    localStorage.setItem(LS_PLACEWORK_KEY, String(v ?? ""));
-  }catch{}
+  try{ localStorage.setItem(LS_PLACEWORK_KEY, String(v ?? "")); }catch{}
 }
 
-const LS_AUTH_KEY = "erp_cal_auth_v2"; // ✅ тот же ключ что в ERPAuth
-
+// ========================================================
+// Auth params
+// ========================================================
+const LS_AUTH_KEY = "erp_cal_auth_v2"; // same as ERPAuth
 function getAuthFromLs(){
   let userIdCoded = "";
   let userName = "";
@@ -147,14 +145,12 @@ function getAuthFromLs(){
     const raw = localStorage.getItem(LS_AUTH_KEY);
     if (raw){
       const obj = JSON.parse(raw);
-      // ✅ NEW: userIdCoded, ✅ OLD: idEnc
       userIdCoded = String(obj?.userIdCoded || obj?.idEnc || "").trim();
       userName    = String(obj?.userName || "").trim();
     }
   }catch{}
   return { userIdCoded, userName };
 }
-
 function withAuthParams(params){
   const { userIdCoded, userName } = getAuthFromLs();
   const p = params instanceof URLSearchParams ? params : new URLSearchParams(params || {});
@@ -164,46 +160,39 @@ function withAuthParams(params){
 }
 
 // ========================================================
-// [БЛОК 3] DOM-ССЫЛКИ (календарь/модалка/контекст/спиннеры)
+// [4] DOM refs
 // ========================================================
-const calendarEl = document.getElementById("calendar");
-const pageSpinner = document.getElementById("pageSpinner");
+const calendarEl   = document.getElementById("calendar");
+const loadSpinner = document.getElementById("loadSpinner");
+const authSpinner = document.getElementById("authSpinner");
 
-const ctx = document.getElementById("ctx");
-const ctxHint = document.getElementById("ctxHint");
+const ctx       = document.getElementById("ctx");
+const ctxHint   = document.getElementById("ctxHint");
 const ctxCreate = document.getElementById("ctxCreate");
-const ctxClear = document.getElementById("ctxClear");
+const ctxClear  = document.getElementById("ctxClear");
 
-const backdrop = document.getElementById("backdrop");
-const modalTitle = document.getElementById("modalTitle");
-const mWhen = document.getElementById("mWhen");
-const mDate = document.getElementById("mDate");
-const mFrom = document.getElementById("mFrom");
-const mTo = document.getElementById("mTo");
+const backdrop     = document.getElementById("backdrop");
+const modalTitle   = document.getElementById("modalTitle");
+const mWhen        = document.getElementById("mWhen");
+const mDate        = document.getElementById("mDate");
+const mFrom        = document.getElementById("mFrom");
+const mTo          = document.getElementById("mTo");
 const mDescription = document.getElementById("mDescription");
 
 const mKpldText = document.getElementById("mKpldText");
 const mKpldList = document.getElementById("mKpldList");
-const mKpld = document.getElementById("mKpld"); // hidden
+const mKpld     = document.getElementById("mKpld");
 
-const mSave = document.getElementById("mSave");
-const mCancel = document.getElementById("mCancel");
-const mDelete = document.getElementById("mDelete");
+const mSave      = document.getElementById("mSave");
+const mCancel    = document.getElementById("mCancel");
+const mDelete    = document.getElementById("mDelete");
 const mPlaceWork = document.getElementById("mPlaceWork");
-const mError = document.getElementById("mError");
+const mError     = document.getElementById("mError");
 
-const LS_USER_ID_CODED = "erp_userIdCoded";
-const LS_USER_NAME     = "erp_userName";
+ctxClear?.addEventListener("click", () => clearEditActive());
 
-ctxClear?.addEventListener("click", () => {
-  clearEditActive();
-});
-
-// зберігати вибір при зміні
 if (mPlaceWork){
-  mPlaceWork.addEventListener("change", () => {
-    setLastPlaceWork(mPlaceWork.value);
-  });
+  mPlaceWork.addEventListener("change", () => setLastPlaceWork(mPlaceWork.value));
 }
 
 function setModalError(text){
@@ -218,8 +207,38 @@ function setModalError(text){
   mError.textContent = t;
 }
 
-// Ошибка загрузки (по центру)
+
+// ========================================================
+// Load error: close on any click / Escape
+// ========================================================
+function closeLoadError(){
+  if (!loadErrorEl) return;
+  loadErrorEl.style.display = "none";
+  loadErrorEl.textContent = "";
+}
+
+// Load error center
 const loadErrorEl = document.getElementById("loadError");
+
+
+
+if (loadErrorEl){
+  // клік будь-де
+  document.addEventListener("mousedown", () => {
+    if (loadErrorEl.style.display === "block"){
+      closeLoadError();
+    }
+  });
+
+  // Escape
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && loadErrorEl.style.display === "block"){
+      closeLoadError();
+    }
+  });
+}
+
+
 function showLoadError(text){
   if (!loadErrorEl) return;
   loadErrorEl.textContent = text || "Не вдалося завантажити дані";
@@ -232,22 +251,18 @@ function hideLoadError(){
 }
 
 // ========================================================
-// [БЛОК 4] OUTLOOK PASTE (кнопка + хоткей)
+// [5] Outlook paste
 // ========================================================
 const mPasteMail = document.getElementById("mPasteMail");
 initOutlookClipboardPaste({
   btn: mPasteMail,
-  mDate,
-  mFrom,
-  mTo,
-  mDescription,
-  mKpldText,
+  mDate, mFrom, mTo, mDescription, mKpldText,
   setModalError
 });
-// Hotkey: Ctrl+Shift+Alt+7 (только когда модалка открыта)
+
 document.addEventListener("keydown", (e) => {
   if (e.ctrlKey && e.shiftKey && e.altKey && e.code === "Digit7") {
-    if (backdrop.style.display === "flex") {
+    if (backdrop?.style.display === "flex") {
       e.preventDefault();
       mPasteMail?.click();
     }
@@ -255,29 +270,64 @@ document.addEventListener("keydown", (e) => {
 });
 
 // ========================================================
-// [БЛОК 5] PAGE SPINNER (глобальный спиннер загрузки страницы)
+// [6] Spinners: LOAD (soft) vs AUTH (modal)
 // ========================================================
-let pageSpinnerCounter = 0;
-function showPageSpinner(reason){
-  pageSpinnerCounter++;
-  pageSpinner.classList.add("is-on");
-  pageSpinner.setAttribute("aria-hidden","false");
-  log("PAGE spinner ON", pageSpinnerCounter, reason || "");
-}
-function hidePageSpinner(reason){
-  pageSpinnerCounter = Math.max(0, pageSpinnerCounter - 1);
-  if (pageSpinnerCounter === 0){
-    pageSpinner.classList.remove("is-on");
-    pageSpinner.setAttribute("aria-hidden","true");
-  }
-  log("PAGE spinner OFF", pageSpinnerCounter, reason || "");
+let loadSpinnerCnt = 0;
+let authSpinnerCnt = 0;
+
+function setSpinnerLabel(rootEl, text){
+  const label = rootEl?.querySelector(".label");
+  if (label && text) label.textContent = String(text);
 }
 
+/* ---- LOAD spinner (не модальный) ---- */
+function showLoadSpinner(reason, labelText = "Завантаження…"){
+  loadSpinnerCnt++;
+  setSpinnerLabel(loadSpinner, labelText);
+
+  loadSpinner?.classList.add("is-on");
+  loadSpinner?.setAttribute("aria-hidden", "false");
+
+  log("LOAD spinner ON", { cnt: loadSpinnerCnt, reason: reason || "" });
+}
+function hideLoadSpinner(reason){
+  loadSpinnerCnt = Math.max(0, loadSpinnerCnt - 1);
+
+  if (loadSpinnerCnt === 0){
+    loadSpinner?.classList.remove("is-on");
+    loadSpinner?.setAttribute("aria-hidden", "true");
+  }
+
+  log("LOAD spinner OFF", { cnt: loadSpinnerCnt, reason: reason || "" });
+}
+
+/* ---- AUTH spinner (модальный) ---- */
+function showAuthSpinner(reason, labelText = "Авторизація…"){
+  authSpinnerCnt++;
+  setSpinnerLabel(authSpinner, labelText);
+
+  authSpinner?.classList.add("is-on");
+  authSpinner?.setAttribute("aria-hidden", "false");
+
+  log("AUTH spinner ON", { cnt: authSpinnerCnt, reason: reason || "" });
+}
+function hideAuthSpinner(reason){
+  authSpinnerCnt = Math.max(0, authSpinnerCnt - 1);
+
+  if (authSpinnerCnt === 0){
+    authSpinner?.classList.remove("is-on");
+    authSpinner?.setAttribute("aria-hidden", "true");
+  }
+
+  log("AUTH spinner OFF", { cnt: authSpinnerCnt, reason: reason || "" });
+}
+
+
 // ========================================================
-// [БЛОК 6] SPINNER ВНУТРИ СОБЫТИЯ (DOM spinner внутри event)
+// [7] Event DOM spinner + edit highlight
 // ========================================================
-const eventDomMap = new Map(); // id -> DOM элемент события
-const savingIds = new Set();   // id событий, которые сейчас "сохраняются"
+const eventDomMap = new Map();
+const savingIds = new Set();
 
 function ensureSpinner(el){
   if (!el) return;
@@ -289,96 +339,58 @@ function ensureSpinner(el){
     el.appendChild(sp);
   }
 }
-function removeSpinner(el){
-  if (!el) return;
-  el.querySelector(".dom-spinner")?.remove();
-}
+function removeSpinner(el){ el?.querySelector(".dom-spinner")?.remove(); }
+
 function findEventEl(eventId){
   const mapped = eventDomMap.get(eventId);
   if (mapped && document.contains(mapped)) return mapped;
-  try {
-    return calendarEl.querySelector(`[data-event-id="${CSS.escape(eventId)}"]`);
-  } catch {
-    return calendarEl.querySelector(`[data-event-id="${String(eventId).replace(/"/g,'\\"')}"]`);
-  }
+  try { return calendarEl.querySelector(`[data-event-id="${CSS.escape(eventId)}"]`); }
+  catch { return calendarEl.querySelector(`[data-event-id="${String(eventId).replace(/"/g,'\\"')}"]`); }
 }
 
-// ========================================================
-// Подсветка события, которое сейчас редактируем в модалке
-// ========================================================
 let editActiveEventId = null;
-
-
 function setEditActive(eventId){
-  // снять со старого
   if (editActiveEventId){
     const oldEl = findEventEl(editActiveEventId);
-    if (oldEl) oldEl.classList.remove("is-edit-active");
+    oldEl?.classList.remove("is-edit-active");
   }
-
   editActiveEventId = eventId || null;
   if (!editActiveEventId) return;
 
-  // попытка №1: прямо сейчас
   const apply = () => {
     const el = findEventEl(editActiveEventId);
-    if (el) el.classList.add("is-edit-active");
+    el?.classList.add("is-edit-active");
   };
-
   apply();
-
-  // попытка №2: в следующий кадр (когда FC уже дорисовал DOM)
   requestAnimationFrame(apply);
-
-  // попытка №3: ещё один кадр (на случай перемонта после спиннера/рендера)
   requestAnimationFrame(() => requestAnimationFrame(apply));
 }
-
-
-/*
-function setEditActive(eventId){
-  if (editActiveEventId){
-    const oldEl = findEventEl(editActiveEventId);
-    if (oldEl) oldEl.classList.remove("is-edit-active");
-  }
-  editActiveEventId = eventId || null;
-  if (editActiveEventId){
-    const el = findEventEl(editActiveEventId);
-    if (el) el.classList.add("is-edit-active");
-  }
-}
-  */
-
-function clearEditActive(){
-  setEditActive(null);
-}
+function clearEditActive(){ setEditActive(null); }
 
 function startSaving(eventId, reason){
   savingIds.add(eventId);
-  const el = findEventEl(eventId);
-  if (el) ensureSpinner(el);
+  ensureSpinner(findEventEl(eventId));
   log("SPINNER ON", eventId, reason || "");
 }
 function stopSaving(eventId, reason){
   savingIds.delete(eventId);
-  const el = findEventEl(eventId);
-  if (el) removeSpinner(el);
+  removeSpinner(findEventEl(eventId));
   log("SPINNER OFF", eventId, reason || "");
 }
 
 // ========================================================
-// [БЛОК 7] МАРКЕРЫ ОШИБОК НА СОБЫТИЯХ (create/update/delete)
+// [8] Error markers on events
 // ========================================================
-function markCreateError(ev){ const el = findEventEl(ev.id); if (el) el.classList.add("is-create-error"); }
-function clearCreateError(ev){ const el = findEventEl(ev.id); if (el) el.classList.remove("is-create-error"); }
+function markCreateError(ev){ findEventEl(ev.id)?.classList.add("is-create-error"); }
+function clearCreateError(ev){ findEventEl(ev.id)?.classList.remove("is-create-error"); }
 function applyCreateErrorText(ev, msg){
   ev.setExtendedProp("__create_error", normalizeErrMessage(msg));
   ev.setExtendedProp("__create_error_short", shortErr(msg));
   markCreateError(ev);
 }
 
-function markUpdateError(ev){ const el = findEventEl(ev.id); if (el) el.classList.add("is-update-error"); }
-function clearUpdateError(ev){ const el = findEventEl(ev.id); if (el) el.classList.remove("is-update-error"); }
+function markUpdateError(ev){ findEventEl(ev.id)?.classList.add("is-update-error"); }
+function clearUpdateError(ev){ findEventEl(ev.id)?.classList.remove("is-update-error"); }
 function applyUpdateErrorText(ev, msg){
   ev.setExtendedProp("__update_error", normalizeErrMessage(msg));
   ev.setExtendedProp("__update_error_short", shortErr(msg));
@@ -390,8 +402,8 @@ function clearUpdateErrorText(ev){
   clearUpdateError(ev);
 }
 
-function markDeleteError(ev){ const el = findEventEl(ev.id); if (el) el.classList.add("is-delete-error"); }
-function clearDeleteError(ev){ const el = findEventEl(ev.id); if (el) el.classList.remove("is-delete-error"); }
+function markDeleteError(ev){ findEventEl(ev.id)?.classList.add("is-delete-error"); }
+function clearDeleteError(ev){ findEventEl(ev.id)?.classList.remove("is-delete-error"); }
 function applyDeleteErrorText(ev, msg){
   ev.setExtendedProp("__delete_error", normalizeErrMessage(msg));
   ev.setExtendedProp("__delete_error_short", shortErr(msg));
@@ -404,7 +416,7 @@ function clearDeleteErrorText(ev){
 }
 
 // ========================================================
-// [БЛОК 8] API URLS + JSON HELPERS (общие функции чтения/нормализации)
+// [9] API urls + helpers
 // ========================================================
 const API_LIST_URL   = "https://webclient.it-enterprise.com/ws/api/_PLUTEST_GET";
 const API_CREATE_URL = "https://webclient.it-enterprise.com/ws/api/_PLUTEST_ADD";
@@ -434,10 +446,8 @@ function normalizeApiResult(obj){
   const Success = Boolean(obj.Success ?? obj.success ?? false);
   const Id = Number(obj.Id ?? obj.id ?? 0) || 0;
   const MessageError = String(obj.MessageError ?? obj.messageError ?? obj.error ?? "").trim();
-
   const objCode = String(obj.PluObj?.objCode ?? obj.objCode ?? "").trim();
   const kzajCode = String(obj.PluObj?.kzajCode ?? obj.kzajCode ?? "").trim();
-
   return { Success, Id, MessageError, objCode, kzajCode };
 }
 function throwIfNotSuccess(opName, res){
@@ -446,10 +456,10 @@ function throwIfNotSuccess(opName, res){
 }
 
 // ========================================================
-// [БЛОК 9] KPLD AUTOCOMPLETE (PLD) — ✅ ОБНОВЛЕНО: obj/kzaj в списке
+// [10] PLD autocomplete (оставлено как у тебя, без функциональных изменений)
 // ========================================================
 
-// Кэш теперь хранит объект: kpld -> { kpld,npld,pldObjCode,pldKzaj, labelText }
+// Кэш: kpld -> { kpld,npld,pldObjCode,pldKzaj,labelText }
 const pldCache = new Map();
 let pldDebTimer = null;
 
@@ -457,7 +467,6 @@ let acItems = [];
 let acActive = -1;
 let acOpen = false;
 
-// Строка для поля ввода (БЕЗ html)
 function buildPldInputText(it){
   const k = String(it?.kpld ?? "").trim();
   const obj = String(it?.pldObjCode ?? "").trim();
@@ -511,12 +520,10 @@ function acPickIndex(i){
   const code = String(it.kpld);
   const labelText = buildPldInputText(it);
 
-  // кэшируем объект целиком
   pldCache.set(code, { ...it, labelText });
-
   pldSet(code, labelText);
   pldHideList();
-  updateKpldClearVisibility();
+  window.updateKpldClearVisibility?.();
 }
 
 function pldRenderList(items){
@@ -536,16 +543,13 @@ function pldRenderList(items){
     const kzaj = escapeHtml(String(it.pldKzaj ?? ""));
     const name = escapeHtml(String(it.npld ?? ""));
 
-    // data-* оставляем минимально нужное
     return `
       <div class="ac-item" data-kpld="${kpld}">
-<div class="ac-line">
-  <span class="ac-head">
-    <span class="ac-kpld">${kpld}</span>
-    ${obj ? `&nbsp;<span class="ac-obj">${obj}</span>` : ``}
-    ${kzaj ? `&nbsp;<span class="ac-kzaj">${kzaj}</span>` : ``}
-  </span>
-</div>
+        <div class="ac-line">
+          <span class="ac-kpld">${kpld}</span>
+          ${obj ? `&nbsp;<span class="ac-obj">${obj}</span>` : ``}
+          ${kzaj ? `&nbsp;<span class="ac-kzaj">${kzaj}</span>` : ``}
+        </div>
         <div class="ac-desc">${name}</div>
       </div>
     `;
@@ -567,10 +571,9 @@ async function apiGetPld({ q = "", kpld = "" } = {}){
   let params = new URLSearchParams();
   params.set("q", q ? String(q) : "");
   params.set("kpld", (kpld !== "" && kpld != null) ? String(kpld) : "0");
-
   params = withAuthParams(params);
-  const url = `${API_PLD_URL}?${params.toString()}`;
 
+  const url = `${API_PLD_URL}?${params.toString()}`;
   log("API PLD ->", url);
 
   const resp = await fetch(url, { method:"GET", headers:{ "accept":"application/json" } });
@@ -599,32 +602,24 @@ async function apiGetPld({ q = "", kpld = "" } = {}){
 async function pldLoadAll(){
   try{
     const items = await apiGetPld({ q: "" });
-    items.forEach(it => {
-      const code = String(it.kpld);
-      pldCache.set(code, { ...it, labelText: buildPldInputText(it) });
-    });
+    items.forEach(it => pldCache.set(String(it.kpld), { ...it, labelText: buildPldInputText(it) }));
     pldRenderList(items);
   } catch(e){
     err("PLD loadAll failed:", e);
     pldHideList();
   }
 }
-
 async function pldSearch(q){
   const s = (q || "").trim();
   try{
     const items = await apiGetPld({ q: s });
-    items.forEach(it => {
-      const code = String(it.kpld);
-      pldCache.set(code, { ...it, labelText: buildPldInputText(it) });
-    });
+    items.forEach(it => pldCache.set(String(it.kpld), { ...it, labelText: buildPldInputText(it) }));
     pldRenderList(items);
   } catch(e){
     err("PLD search failed:", e);
     pldHideList();
   }
 }
-
 async function pldPrefillByKpld(kpld){
   const k = String(Number(kpld) || "");
   if (!k){
@@ -659,14 +654,12 @@ async function pldPrefillByKpld(kpld){
   } catch(e){ err("PLD prefill failed:", e); }
   pldSet(k, k);
 }
-
 async function pldShowSelected(){
   const k = String(Number(mKpld.value || 0) || "");
   if (!k) return;
 
   if (pldCache.has(k)){
-    const hit = pldCache.get(k);
-    pldRenderList([hit]);
+    pldRenderList([pldCache.get(k)]);
     return;
   }
   try{
@@ -706,7 +699,7 @@ function initPldUI(){
       pldSearch(s);
     }, 200);
 
-    updateKpldClearVisibility();
+    window.updateKpldClearVisibility?.();
   });
 
   mKpldText.addEventListener("keydown", (e) => {
@@ -719,7 +712,6 @@ function initPldUI(){
       }
       return;
     }
-
     if (e.key === "ArrowDown"){
       e.preventDefault();
       if (!acItems.length) return;
@@ -753,7 +745,6 @@ function initPldUI(){
       pldHideList();
       const raw = (mKpldText.value || "").trim();
       if (raw && !mKpld.value){
-        // берем первое число (kpld) из начала строки
         const guess = raw.match(/^\s*(\d+)\b/)?.[1] || "";
         if (/^\d+$/.test(guess)) pldPrefillByKpld(guess);
       }
@@ -766,9 +757,7 @@ function initPldUI(){
     }
   });
 
-  // ========================================================
-  // KPLD clear button (красный крестик)
-  // ========================================================
+  // clear button
   const mKpldClear = document.getElementById("mKpldClear");
 
   function updateKpldClearVisibility(){
@@ -776,8 +765,6 @@ function initPldUI(){
     const hasValue = !!(mKpld.value || mKpldText.value.trim());
     mKpldClear.style.display = hasValue ? "block" : "none";
   }
-
-  // 🌍 делаем доступной глобально (для outlook.paste.bundle.js)
   window.updateKpldClearVisibility = updateKpldClearVisibility;
 
   if (mKpldClear){
@@ -793,21 +780,15 @@ function initPldUI(){
 initPldUI();
 
 // ========================================================
-// [ДАЛЕЕ] — всё остальное без изменений
+// [11] API calls LIST/SKD/CREATE/UPDATE/DELETE
 // ========================================================
-
-// ========================================================
-// [БЛОК 10] API ВЫЗОВЫ (LIST/SKD/CREATE/UPDATE/DELETE)
-// ========================================================
-
-// LIST (работы)
-async function apiGetListJobs(dateFrom, dateTo){
+async function apiGetListJobs(dateFrom, dateTo, signal){
   const params = withAuthParams({ dateFrom, dateTo });
   const url = `${API_LIST_URL}?${params.toString()}`;
 
   log("API LIST ->", url);
 
-  const resp = await fetch(url, { method:"GET", headers:{ "accept":"application/json" } });
+  const resp = await fetch(url, { method:"GET", headers:{ "accept":"application/json" }, signal });
   const text = await resp.text();
   log("API LIST <- HTTP", resp.status, "raw:", text);
 
@@ -839,17 +820,16 @@ async function apiGetListJobs(dateFrom, dateTo){
     );
 }
 
-// SKD интервалы
 function parseIsoDateTime(s){
   const d = new Date(String(s || ""));
   return isNaN(d.getTime()) ? null : d;
 }
-async function apiGetSkd(dateFrom, dateTo){
+async function apiGetSkd(dateFrom, dateTo, signal){
   const params = withAuthParams({ dateFrom, dateTo });
   const url = `${API_SKD_URL}?${params.toString()}`;
   log("API SKD ->", url);
 
-  const resp = await fetch(url, { method:"GET", headers:{ "accept":"application/json" } });
+  const resp = await fetch(url, { method:"GET", headers:{ "accept":"application/json" }, signal });
   const text = await resp.text();
   log("API SKD <- HTTP", resp.status, "raw:", text);
 
@@ -869,6 +849,7 @@ async function apiGetSkd(dateFrom, dateTo){
     }))
     .filter(x => x.from && x.to);
 }
+
 function skdIntervalsToMarkerEvents(items){
   const ONE_MIN = 60 * 1000;
   const out = [];
@@ -900,7 +881,6 @@ function skdIntervalsToMarkerEvents(items){
   return out;
 }
 
-// CREATE
 async function apiCreateJob(payload){
   const params = withAuthParams(new URLSearchParams());
   const url = `${API_CREATE_URL}?${params.toString()}`;
@@ -932,7 +912,6 @@ async function apiCreateJob(payload){
   return { id: String(res.Id), objCode: res.objCode ?? "", kzajCode: res.kzajCode ?? "" };
 }
 
-// UPDATE
 async function apiUpdateJob(payload){
   const params = withAuthParams(new URLSearchParams());
   const url = `${API_UPDATE_URL}?${params.toString()}`;
@@ -944,7 +923,7 @@ async function apiUpdateJob(payload){
     resp = await fetch(url, {
       method:"POST",
       headers:{ "accept":"application/json", "Content-Type":"application/json" },
-      body: JSON.stringify( {Record: payload} )
+      body: JSON.stringify({Record: payload})
     });
   } catch(fetchErr){
     throw new Error("Немає доступу до API: " + normalizeErrMessage(fetchErr));
@@ -963,7 +942,6 @@ async function apiUpdateJob(payload){
   return { objCode: res?.objCode ?? "", kzajCode: res?.kzajCode ?? "" };
 }
 
-// DELETE
 async function apiDeleteJob(id){
   const params = withAuthParams({ Id: String(id) });
   const url = `${API_DELETE_URL}?${params.toString()}`;
@@ -991,14 +969,13 @@ async function apiDeleteJob(id){
 }
 
 // ========================================================
-// [БЛОК 11] ЕДИНАЯ МОДЕЛЬ СОБЫТИЯ (model) + МАППИНГИ
+// [12] Unified model + mappings
 // ========================================================
 function buildTitle(model){
   return `<span class="ev-obj-code">${String(model.objCode||"")}</span> ` +
          `<span class="ev-kzaj-code">${String(model.kzajCode||"")}</span> ` +
          `${String(model.description||"")}`;
 }
-
 function ensureErrorProps(ep){
   return {
     __create_error: ep?.__create_error || "",
@@ -1009,14 +986,12 @@ function ensureErrorProps(ep){
     __delete_error_short: ep?.__delete_error_short || "",
   };
 }
-
 function scrubTempProps(ep){
   if (!ep) return;
   delete ep.__pending_create;
   delete ep.__create_error;
   delete ep.__create_error_short;
 }
-
 function modelFromJob(job){
   const start = new Date(job.date + "T" + job.time_from + ":00");
   const end   = new Date(job.date + "T" + job.time_to   + ":00");
@@ -1031,7 +1006,6 @@ function modelFromJob(job){
     errors: ensureErrorProps({})
   };
 }
-
 function modelFromEvent(ev){
   const ep = ev.extendedProps || {};
   return {
@@ -1047,7 +1021,6 @@ function modelFromEvent(ev){
     __pending_create: !!ep.__pending_create
   };
 }
-
 function payloadFromModel(m){
   return {
     id: Number(String(m.id).replace(/[^\d]/g,"")) || 0,
@@ -1061,7 +1034,6 @@ function payloadFromModel(m){
     placeWork: String(m.placeWork || "").trim()
   };
 }
-
 function applyModelToEvent(ev, m){
   ev.setStart(m.start);
   ev.setEnd(m.end);
@@ -1081,7 +1053,6 @@ function applyModelToEvent(ev, m){
   ev.setExtendedProp("__delete_error", e.__delete_error || "");
   ev.setExtendedProp("__delete_error_short", e.__delete_error_short || "");
 }
-
 function modelToEventInput(m){
   return {
     id: String(m.id),
@@ -1098,17 +1069,14 @@ function modelToEventInput(m){
     }
   };
 }
-
-function jobToEvent(job){
-  return modelToEventInput(modelFromJob(job));
-}
+function jobToEvent(job){ return modelToEventInput(modelFromJob(job)); }
 
 // ========================================================
-// [БЛОК 12] МОДАЛКА (открыть/закрыть/валидация/preview)
+// [13] Modal open/close + validation
 // ========================================================
-let modalMode = null; // 'create' | 'edit'
+let modalMode = null;   // 'create' | 'edit'
 let currentEvent = null;
-let pendingCreate = null; // { start,end, existingTempEvent? }
+let pendingCreate = null;
 
 function fillModalWhen(start, end){
   mWhen.textContent = formatWhenWithDuration(start, end);
@@ -1147,7 +1115,6 @@ function openModal(mode, payload){
     }
 
     setModalError(text ? ("⚠️ " + text) : "");
-
   } else {
     if (mPlaceWork){
       const fromPayload = String(payload?.placeWork || "").trim();
@@ -1160,7 +1127,6 @@ function openModal(mode, payload){
     clearEditActive();
 
     fillModalWhen(pendingCreate.start, pendingCreate.end);
-
     mDescription.value = payload?.description ?? "";
 
     const kpldVal = Number(payload?.kpld || 0) || 0;
@@ -1181,7 +1147,6 @@ function openModal(mode, payload){
 }
 
 function closeModal(){
-
   backdrop.style.display = "none";
   backdrop.setAttribute("aria-hidden","true");
   setModalError("");
@@ -1190,6 +1155,7 @@ function closeModal(){
   modalMode = null;
   pldHideList();
 }
+
 mCancel.onclick = closeModal;
 
 document.addEventListener("keydown", (e) => {
@@ -1208,30 +1174,31 @@ function getStartEndFromModal(){
   if (diff <= 0) return { ok:false, error:"Час «по» має бути більшим за «з»." };
   return { ok:true, start: start0, end: end0 };
 }
+
 function refreshWhenPreview(){
-  window.__erpRefreshWhenPreview = refreshWhenPreview;
   const res = getStartEndFromModal();
   if (!res.ok) return;
   mWhen.textContent = formatWhenWithDuration(res.start, res.end);
 }
+window.__erpRefreshWhenPreview = refreshWhenPreview;
+
 [mDate, mFrom, mTo].forEach(el => el.addEventListener("change", refreshWhenPreview));
 [mFrom, mTo].forEach(el => el.addEventListener("input", refreshWhenPreview));
 
 // ========================================================
-// [БЛОК 13] CONFIRM DELETE (вторая модалка подтверждения)
+// [14] Confirm delete (2nd modal)
 // ========================================================
 function confirmDelete(){
   return new Promise(resolve => {
-    const backdrop = document.getElementById("confirmBackdrop");
+    const b = document.getElementById("confirmBackdrop");
     const okBtn = document.getElementById("confirmOk");
     const cancelBtn = document.getElementById("confirmCancel");
 
-    backdrop.style.display = "flex";
+    b.style.display = "flex";
 
     const onEsc = (e) => { if (e.key === "Escape") cleanup(false); };
-
     const cleanup = (result) => {
-      backdrop.style.display = "none";
+      b.style.display = "none";
       okBtn.onclick = null;
       cancelBtn.onclick = null;
       document.removeEventListener("keydown", onEsc);
@@ -1240,20 +1207,30 @@ function confirmDelete(){
 
     okBtn.onclick = () => cleanup(true);
     cancelBtn.onclick = () => cleanup(false);
-
     document.addEventListener("keydown", onEsc);
   });
 }
 
 // ========================================================
-// [БЛОК 13.5] AUTH: инициализация БЕЗ зависимости от widget (чтобы не было TDZ)
+// [15] AUTH init (PROD): ERPAuth uses app toast
 // ========================================================
 let auth = null;
-let _setLoginBtnText = (text) => { /* noop */ };
+let _setLoginBtnText = (text) => {};
 
 auth = ERPAuth.init({
   apiBase: "https://webclient.it-enterprise.com",
   setButtonText: (text) => _setLoginBtnText(text),
+  toast: (message, type="error", title="Повідомлення", ms=4500) => toast(message, type, title, ms),
+
+    // ✅ ДОБАВЬ ЭТО:
+  setSpinner: (isOn, labelText, { modal } = {}) => {
+    const sp = document.getElementById("pageSpinner");
+    const label = sp?.querySelector(".label");
+    if (label && labelText) label.textContent = String(labelText);
+
+    if (isOn) showAuthSpinner("auth", labelText || "Авторизація…");
+    else      hideAuthSpinner("auth");
+  },
 
   confirmLogout: async () => {
     return await uiConfirm({
@@ -1275,60 +1252,74 @@ auth = ERPAuth.init({
 });
 
 // ========================================================
-// [БЛОК 13.6] SAFE widget.setEvents (щоб не падало на datesSet під час init)
+// [16] widget safe setEvents
 // ========================================================
 let widgetRef = null;
 let pendingEventsToSet = null;
 
 function setEventsSafe(events){
-  if (widgetRef){
-    widgetRef.setEvents(events);
-  } else {
-    pendingEventsToSet = events;
+  if (widgetRef) widgetRef.setEvents(events);
+  else pendingEventsToSet = events;
+}
+
+// ========================================================
+// [17] Unified loader LIST+SKD (главный рефакторинг)
+// ========================================================
+
+
+function buildNetworkMessage(e){
+  if (e?.name === "AbortError"){
+    return "Таймаут 15 сек: сервер довго відповідає (PLU\\SKD не завантажено)\nПеревірте, що ви знаходитесь у внутрішній мережі IT-Enterprise";
+  }
+  if (e?.message === "Failed to fetch"){
+    return "Не вдалось отримати доступ до серверу ITA\nПеревірте, що ви знаходитесь у внутрішній мережі IT-Enterprise";
+  }
+  return "Не вдалось отримати доступ до серверу ITA\nПеревірте, що ви знаходитесь у внутрішній мережі IT-Enterprise\nПомилка: " + (e?.message || e);
+}
+
+async function fetchEventsForRange(from, to, signal){
+  const [jobs, skd] = await Promise.all([
+    apiGetListJobs(from, to, signal),
+    apiGetSkd(from, to, signal),
+  ]);
+  return [...jobs.map(jobToEvent), ...skdIntervalsToMarkerEvents(skd)];
+}
+
+async function loadRangeAndRender({ from, to, reason = "" }){
+  showLoadSpinner(reason || "load", "Завантаження…");
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), 15000);
+
+  try{
+    if (!auth.isLoggedIn()){
+      setEventsSafe([]);
+      hideLoadError();
+      return;
+    }
+
+    const events = await fetchEventsForRange(from, to, ac.signal);
+    setEventsSafe(events);
+    hideLoadError();
+  } catch(e){
+    err("LOAD failed:", e);
+    showLoadError(buildNetworkMessage(e));
+  } finally {
+    clearTimeout(timer);
+    hideLoadSpinner(reason || "load");
   }
 }
 
 // ========================================================
-// [БЛОК 14] КАЛЕНДАРЬ: ИНИЦИАЛИЗАЦИЯ + ХУКИ
+// [18] Calendar init
 // ========================================================
 const widget = new ERPDayCalendar("#calendar", {
   ctx: { el: ctx, hintEl: ctxHint, btnCreate: ctxCreate, btnClear: ctxClear },
 
-
-  onRefreshClick: async () => {
-  await reloadCalendarData("manual refresh");
-},
   onRangeChanged: async ({ from, to }) => {
-    showPageSpinner("datesSet");
-    try{
-      if (!auth.isLoggedIn()){
-        setEventsSafe([]);
-        hideLoadError();
-        return;
-      }
-
-      const [jobs, skd] = await Promise.all([
-        apiGetListJobs(from, to),
-        apiGetSkd(from, to)
-      ]);
-
-      const events = [
-        ...jobs.map(jobToEvent),
-        ...skdIntervalsToMarkerEvents(skd)
-      ];
-
-      setEventsSafe(events);
-      hideLoadError();
-
-    } catch(e){
-      err("LIST+SKD failed:", e);
-      showLoadError("Не вдалося завантажити записи/СКД.\nПомилка: " + (e?.message || e));
-    } finally {
-      hidePageSpinner("datesSet");
-    }
+    await loadRangeAndRender({ from, to, reason: "datesSet" });
   },
 
-    onRefreshClick: async () => {
+  onRefreshClick: async () => {
     if (!auth.isLoggedIn()){
       toast("Для оновлення потрібно залогінитись.", "warn", "🔐 Потрібен вхід");
       return;
@@ -1345,7 +1336,7 @@ const widget = new ERPDayCalendar("#calendar", {
     openModal("create", { start, end });
   },
 
-  onEditRequested: async  ({ event }) => {
+  onEditRequested: async ({ event }) => {
     if (event.extendedProps?.__skd_marker) return;
     if (!await requireLogin()) return;
 
@@ -1369,17 +1360,25 @@ const widget = new ERPDayCalendar("#calendar", {
     openModal("edit", { event, errorText: del || upd || "" });
   },
 
-  onEventMovedOrResized: async ({ event, revert }) => {
-    if (event.extendedProps?.__skd_marker) return;
+onEventMovedOrResized: async ({ event, revert }) => {
+  if (event.extendedProps?.__skd_marker) return;
 
-    if (!await requireLogin()){
-      revert?.();
-      return;
-    }
+  if (!await requireLogin()){
+    revert?.();
+    return;
+  }
+  if (isTempId(event.id)) return;
 
-    if (isTempId(event.id)) return;
-    await safeUpdateEvent(event);
-  },
+  // ✅ 1) во время и после drag/resize считаем событие "активным"
+  widget.unselect();          // чтобы не оставалось чужих выделений
+  setEditActive(event.id);    // сразу подсветить как active (тёмно-синий)
+
+  await safeUpdateEvent(event);
+
+  // ✅ 2) иногда DOM пересоздаётся после update/перерендера — повторяем фиксацию
+  //requestAnimationFrame(() => setEditActive(event.id));
+},
+
 
   onEventDidMount: (info) => {
     info.el.dataset.eventId = info.event.id;
@@ -1388,7 +1387,6 @@ const widget = new ERPDayCalendar("#calendar", {
     if (editActiveEventId && info.event.id === editActiveEventId){
       info.el.classList.add("is-edit-active");
     }
-
     if (savingIds.has(info.event.id)) ensureSpinner(info.el);
 
     if (info.event.extendedProps?.__create_error) {
@@ -1423,10 +1421,9 @@ const widget = new ERPDayCalendar("#calendar", {
 });
 
 // ========================================================
-// [БЛОК 14.5] AUTH <-> WIDGET
+// [19] AUTH <-> WIDGET
 // ========================================================
 widgetRef = widget;
-
 if (pendingEventsToSet !== null){
   widgetRef.setEvents(pendingEventsToSet);
   pendingEventsToSet = null;
@@ -1443,35 +1440,34 @@ async function requireLogin(){
 
 const calendar = widget.getCalendar();
 
+// при selection — сбрасываем синее active
+//calendar.on("select", () => clearEditActive());
+// коли користувач виділяє інтервал часу (drag по пустому місцю) — active треба скинути
+calendar.on("select", () => clearEditActive());
+
+// ❌ ВАЖЛИВО: unselect може викликатись програмно (widget.unselect())
+// і тоді active буде скидатися "невчасно" -> блимання
+// calendar.on("unselect", () => clearEditActive());
+
+// клік по пустому місцю календаря -> зняти active (щоб не висів старий)
+calendarEl?.addEventListener("mousedown", (e) => {
+  if (!e.target.closest(".fc-event")) clearEditActive();
+});
+
+
 function isDateInActiveRange(date){
   const view = calendar?.view;
   if (!view) return true;
-
   const d = new Date(date);
   const from = new Date(view.activeStart);
-  const to   = new Date(view.activeEnd); // activeEnd — EXCLUSIVE
-
+  const to   = new Date(view.activeEnd);
   return d.getTime() >= from.getTime() && d.getTime() < to.getTime();
 }
-
 function gotoDateIfOutOfRange(date){
   if (!date) return;
   if (isDateInActiveRange(date)) return;
-
-  // Перехід на день/тиждень, який містить дату події
   calendar.gotoDate(new Date(date));
 }
-
-
-// ✅ якщо користувач робить жовте виділення — скидаємо синій active event
-calendar.on("select", () => {
-  clearEditActive();
-});
-
-calendar.on("unselect", () => {
-  clearEditActive();
-});
-
 
 async function reloadCalendarData(reason = ""){
   if (!auth.isLoggedIn()){
@@ -1483,40 +1479,19 @@ async function reloadCalendarData(reason = ""){
   const view = calendar.view;
   if (!view) return;
 
-  const pad2 = n => String(n).padStart(2,'0');
-  const isoDate2 = (d) => {
-    d = new Date(d);
-    return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
-  };
+  const from = isoDate(view.activeStart);
+  const to = isoDate(new Date(view.activeEnd.getTime() - 1));
 
-  const from = isoDate2(view.activeStart);
-  const to = isoDate2(new Date(view.activeEnd.getTime() - 1));
-
-  log("RELOAD after auth", reason, { from, to });
-
-  showPageSpinner("reload auth");
-  try{
-    const [jobs, skd] = await Promise.all([ apiGetListJobs(from, to), apiGetSkd(from, to) ]);
-    const events = [...jobs.map(jobToEvent), ...skdIntervalsToMarkerEvents(skd)];
-    setEventsSafe(events);
-    hideLoadError();
-  }catch(e){
-    err("Reload after auth failed:", e);
-    showLoadError("Не вдалося оновити дані після входу.\nПомилка: " + (e?.message || e));
-  }finally{
-    hidePageSpinner("reload auth");
-  }
+  log("RELOAD", reason, { from, to });
+  await loadRangeAndRender({ from, to, reason: "reload " + reason });
 }
 
-// Click: открыть модалку если есть ошибки, либо temp create
+// click: подсветка + открыть модалку только при ошибках / temp
 calendar.on("eventClick", async (info) => {
   info.jsEvent.preventDefault();
-
-    // ✅ якщо був жовтий selection — прибираємо його
   widget.unselect();
 
   const ev = info.event;
-   // ✅ 1 клик = выделили
   setEditActive(ev.id);
 
   if (ev.extendedProps?.__skd_marker) return;
@@ -1540,12 +1515,11 @@ calendar.on("eventClick", async (info) => {
   const upd = ev.extendedProps?.__update_error || "";
   if (del || upd){
     openModal("edit", { event: ev, errorText: del || upd });
-    return;
   }
 });
 
 // ========================================================
-// [БЛОК 15] CREATE (tmp event -> API -> replace id)
+// [20] CREATE (tmp -> API -> replace)
 // ========================================================
 async function createOrResubmitTempEvent(ev){
   startSaving(ev.id, "create/submit tmp");
@@ -1573,13 +1547,22 @@ async function createOrResubmitTempEvent(ev){
 
     ev.remove();
 
-    const created = calendar.addEvent(modelToEventInput(snapshot));
-    // ✅ перенести подсветку на "реальный" event
-    setEditActive(created.id);
 
-    requestAnimationFrame(() => stopSaving(created.id, "create done"));
+const createdId = String(snapshot.id);
+const existed = calendar.getEventById(createdId);
 
-    return created.id;
+if (existed){
+  applyModelToEvent(existed, snapshot);
+  setEditActive(existed.id); // ✅ ВАЖЛИВО: повернути підсвітку на real
+  requestAnimationFrame(() => stopSaving(existed.id, "create done (already existed)"));
+  return existed.id;
+}
+
+const created = calendar.addEvent(modelToEventInput(snapshot));
+setEditActive(created.id);   // ✅ ВАЖЛИВО: підсвітити реальну подію
+
+requestAnimationFrame(() => stopSaving(created.id, "create done"));
+return created.id;
 
   } catch(e){
     stopSaving(ev.id, "create failed");
@@ -1611,14 +1594,12 @@ async function createJobFromModal(model){
     }
   });
 
-  // ✅ СРАЗУ делаем ярко-синим (не ждём API)
   setEditActive(ev.id);
-
   return await createOrResubmitTempEvent(ev);
 }
 
 // ========================================================
-// [БЛОК 16] UPDATE / DELETE
+// [21] UPDATE / DELETE
 // ========================================================
 async function safeUpdateEvent(event){
   const id = event.id;
@@ -1661,19 +1642,17 @@ async function safeDeleteEvent(event){
     event.remove();
     clearDeleteErrorText(event);
     log("DELETE OK (API)", id);
-
   } catch(e){
     applyDeleteErrorText(event, e);
     err("DELETE failed:", e);
     throw e;
-
   } finally {
     stopSaving(id, "delete done");
   }
 }
 
 // ========================================================
-// [БЛОК 17] SAVE / DELETE В МОДАЛКЕ
+// [22] SAVE / DELETE in modal
 // ========================================================
 mSave.onclick = async () => {
   if (!await requireLogin()) return;
@@ -1725,22 +1704,20 @@ mSave.onclick = async () => {
       closeModal();
       widget.unselect();
 
-      // ✅ ДОДАЙ ОЦЕ:
       gotoDateIfOutOfRange(m.start);
 
       const newId = await createOrResubmitTempEvent(ev);
-      if (newId) setEditActive(newId);
+      //if (newId) setEditActive(newId);
       return;
     }
 
     closeModal();
     widget.unselect();
 
-    // ✅ ДОДАЙ ОЦЕ:
     gotoDateIfOutOfRange(modalModel.start);
 
     const newId = await createJobFromModal(modalModel);
-    if (newId) setEditActive(newId);
+    //if (newId) setEditActive(newId);
     return;
   }
 
@@ -1759,8 +1736,6 @@ mSave.onclick = async () => {
     applyModelToEvent(ev, m);
 
     closeModal();
-
-    // ✅ ДОДАЙ ОЦЕ:
     gotoDateIfOutOfRange(m.start);
 
     await safeUpdateEvent(ev);
@@ -1783,14 +1758,6 @@ mDelete.onclick = async () => {
   const ev = currentEvent;
   closeModal();
 
-  try {
-    await safeDeleteEvent(ev);
-  } catch(e){
-    // событие осталось с ошибкой
-  }
+  try { await safeDeleteEvent(ev); }
+  catch { /* оставили на ивенте ошибку */ }
 };
-
-// ========================================================
-// [БЛОК 18] МЕЛОЧИ: unselect при Esc (модалка)
-// ========================================================
-mCancel.onclick = closeModal;

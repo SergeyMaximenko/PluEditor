@@ -39,23 +39,19 @@ export function uiConfirm(opts = {}){
     ok.onclick = () => cleanup(true);
     cancel.onclick = () => cleanup(false);
 
-    // клік по фону
+    // click on backdrop
     const onMouseDown = (e) => {
-      if (e.target === b){
-        document.removeEventListener("mousedown", onMouseDown);
-        cleanup(false);
-      }
+      if (e.target === b) cleanup(false);
     };
-    document.addEventListener("mousedown", onMouseDown);
 
     // ESC
-    document.addEventListener("keydown", function esc(e){
-      if (e.key === "Escape"){
-        document.removeEventListener("keydown", esc);
-        document.removeEventListener("mousedown", onMouseDown);
-        cleanup(false);
-      }
-    });
+    const onKeyDown = (e) => {
+      if (e.key === "Escape") cleanup(false);
+    };
+
+    // attach with auto-remove
+    document.addEventListener("mousedown", onMouseDown, { once:true });
+    document.addEventListener("keydown", onKeyDown, { once:true });
 
     setTimeout(() => ok.focus(), 0);
   });
