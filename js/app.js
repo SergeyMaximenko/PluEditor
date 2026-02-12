@@ -15,26 +15,26 @@ import { uiConfirm } from "./ui.modal.bundle.js";
 // [1] LOG
 // ========================================================
 const LOG_PREFIX = "[ERP-Cal]";
-function log(...args){ console.log(LOG_PREFIX, ...args); }
-function err(...args){ console.error(LOG_PREFIX, ...args); }
+function log(...args) { console.log(LOG_PREFIX, ...args); }
+function err(...args) { console.error(LOG_PREFIX, ...args); }
 
 // ========================================================
 // [2] Utils date/time
 // ========================================================
-const pad2 = n => String(n).padStart(2,'0');
-function fmtTime(d){ d = new Date(d); return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`; }
-function fmtDate(d){ d = new Date(d); return d.toLocaleDateString('uk-UA'); }
-function isoDate(d){ d = new Date(d); return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`; }
+const pad2 = n => String(n).padStart(2, '0');
+function fmtTime(d) { d = new Date(d); return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`; }
+function fmtDate(d) { d = new Date(d); return d.toLocaleDateString('uk-UA'); }
+function isoDate(d) { d = new Date(d); return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; }
 
-function parseTimeHHMM(s){
+function parseTimeHHMM(s) {
   if (!s) return null;
   const m = String(s).match(/^(\d{2}):(\d{2})$/);
   if (!m) return null;
   const hh = Number(m[1]), mm = Number(m[2]);
-  if (hh<0 || hh>23 || mm<0 || mm>59) return null;
+  if (hh < 0 || hh > 23 || mm < 0 || mm > 59) return null;
   return { hh, mm };
 }
-function parseDateYYYYMMDD(s){
+function parseDateYYYYMMDD(s) {
   if (!s) return null;
   const m = String(s).match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!m) return null;
@@ -42,22 +42,22 @@ function parseDateYYYYMMDD(s){
   const dt = new Date(y, mo, d, 0, 0, 0, 0);
   return isNaN(dt.getTime()) ? null : dt;
 }
-function combineDateTime(dateStr, timeStr){
+function combineDateTime(dateStr, timeStr) {
   const d = parseDateYYYYMMDD(dateStr);
   const t = parseTimeHHMM(timeStr);
   if (!d || !t) return null;
   return new Date(d.getFullYear(), d.getMonth(), d.getDate(), t.hh, t.mm, 0, 0);
 }
-function minutesDiff(a,b){ return Math.round((b.getTime()-a.getTime())/60000); }
-function sameDay(a,b){
-  return a.getFullYear()===b.getFullYear()
-    && a.getMonth()===b.getMonth()
-    && a.getDate()===b.getDate();
+function minutesDiff(a, b) { return Math.round((b.getTime() - a.getTime()) / 60000); }
+function sameDay(a, b) {
+  return a.getFullYear() === b.getFullYear()
+    && a.getMonth() === b.getMonth()
+    && a.getDate() === b.getDate();
 }
-function isWithinSingleDay(start, end){
+function isWithinSingleDay(start, end) {
   return !!start && !!end && sameDay(start, end);
 }
-function durationUaShort(totalMinutes){
+function durationUaShort(totalMinutes) {
   totalMinutes = Math.max(0, Math.round(totalMinutes || 0));
   const h = Math.floor(totalMinutes / 60);
   const m = totalMinutes % 60;
@@ -65,27 +65,27 @@ function durationUaShort(totalMinutes){
   if (h > 0) return `${h} год`;
   return `${m} хв`;
 }
-function formatWhenWithDuration(start, end){
+function formatWhenWithDuration(start, end) {
   const dur = durationUaShort(minutesDiff(start, end));
   return `${fmtDate(start)}  ${fmtTime(start)}–${fmtTime(end)} (${dur})`;
 }
-function genGuid(){
+function genGuid() {
   if (crypto && crypto.randomUUID) return crypto.randomUUID();
-  const s4 = () => Math.floor((1+Math.random())*0x10000).toString(16).substring(1);
+  const s4 = () => Math.floor((1 + Math.random()) * 0x10000).toString(16).substring(1);
   return `${s4()}${s4()}-${s4()}-${s4()}-${s4()}-${s4()}${s4()}${s4()}`.toUpperCase();
 }
-function isTempId(id){ return typeof id === "string" && id.startsWith("tmp-"); }
+function isTempId(id) { return typeof id === "string" && id.startsWith("tmp-"); }
 
-function normalizeErrMessage(e){
+function normalizeErrMessage(e) {
   const msg = (e && (e.message || e.toString())) ? String(e.message || e.toString()) : "Помилка";
-  return msg.replace(/\s+/g," ").trim();
+  return msg.replace(/\s+/g, " ").trim();
 }
-function shortErr(msg, max=120){
+function shortErr(msg, max = 120) {
   msg = normalizeErrMessage(msg);
   if (msg.length <= max) return msg;
-  return msg.slice(0, max-1) + "…";
+  return msg.slice(0, max - 1) + "…";
 }
-function escapeHtml(str){
+function escapeHtml(str) {
   return String(str ?? "")
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
@@ -97,7 +97,7 @@ function escapeHtml(str){
 // ========================================================
 // [3] Toast (единый)
 // ========================================================
-function toast(message, type="error", title="Повідомлення", ms=4500){
+function toast(message, type = "error", title = "Повідомлення", ms = 4500) {
   const el = document.createElement("div");
   el.className = `erp-toast ${type}`;
   el.innerHTML = `
@@ -125,81 +125,81 @@ function toast(message, type="error", title="Повідомлення", ms=4500)
 // PlaceWork: persist last choice
 // ========================================================
 const LS_PLACEWORK_KEY = "erp_cal_last_placeWork_v1";
-function getLastPlaceWork(){
-  try{
+function getLastPlaceWork() {
+  try {
     const v = localStorage.getItem(LS_PLACEWORK_KEY);
     return (v && String(v).trim()) ? String(v).trim() : "";
-  }catch{ return ""; }
+  } catch { return ""; }
 }
-function setLastPlaceWork(v){
-  try{ localStorage.setItem(LS_PLACEWORK_KEY, String(v ?? "")); }catch{}
+function setLastPlaceWork(v) {
+  try { localStorage.setItem(LS_PLACEWORK_KEY, String(v ?? "")); } catch { }
 }
 
 // ========================================================
 // Auth params
 // ========================================================
 const LS_AUTH_KEY = "erp_cal_auth_v2"; // same as ERPAuth
-function getAuthFromLs(){
+function getAuthFromLs() {
   let userIdCoded = "";
   let userName = "";
-  try{
+  try {
     const raw = localStorage.getItem(LS_AUTH_KEY);
-    if (raw){
+    if (raw) {
       const obj = JSON.parse(raw);
       userIdCoded = String(obj?.userIdCoded || obj?.idEnc || "").trim();
-      userName    = String(obj?.userName || "").trim();
+      userName = String(obj?.userName || "").trim();
     }
-  }catch{}
+  } catch { }
   return { userIdCoded, userName };
 }
-function withAuthParams(params){
+function withAuthParams(params) {
   const { userIdCoded, userName } = getAuthFromLs();
   const p = params instanceof URLSearchParams ? params : new URLSearchParams(params || {});
   if (userIdCoded) p.set("UserIdCoded", userIdCoded);
-  if (userName)    p.set("UserName", userName);
+  if (userName) p.set("UserName", userName);
   return p;
 }
 
 // ========================================================
 // [4] DOM refs
 // ========================================================
-const calendarEl   = document.getElementById("calendar");
+const calendarEl = document.getElementById("calendar");
 const loadSpinner = document.getElementById("loadSpinner");
 const authSpinner = document.getElementById("authSpinner");
 
-const ctx       = document.getElementById("ctx");
-const ctxHint   = document.getElementById("ctxHint");
+const ctx = document.getElementById("ctx");
+const ctxHint = document.getElementById("ctxHint");
 const ctxCreate = document.getElementById("ctxCreate");
-const ctxClear  = document.getElementById("ctxClear");
+const ctxClear = document.getElementById("ctxClear");
 
-const backdrop     = document.getElementById("backdrop");
-const modalTitle   = document.getElementById("modalTitle");
-const mWhen        = document.getElementById("mWhen");
-const mDate        = document.getElementById("mDate");
-const mFrom        = document.getElementById("mFrom");
-const mTo          = document.getElementById("mTo");
+const backdrop = document.getElementById("backdrop");
+const modalTitle = document.getElementById("modalTitle");
+const mWhen = document.getElementById("mWhen");
+const mDate = document.getElementById("mDate");
+const mFrom = document.getElementById("mFrom");
+const mTo = document.getElementById("mTo");
 const mDescription = document.getElementById("mDescription");
 
 const mKpldText = document.getElementById("mKpldText");
 const mKpldList = document.getElementById("mKpldList");
-const mKpld     = document.getElementById("mKpld");
+const mKpld = document.getElementById("mKpld");
 
-const mSave      = document.getElementById("mSave");
-const mCancel    = document.getElementById("mCancel");
-const mDelete    = document.getElementById("mDelete");
+const mSave = document.getElementById("mSave");
+const mCancel = document.getElementById("mCancel");
+const mDelete = document.getElementById("mDelete");
 const mPlaceWork = document.getElementById("mPlaceWork");
-const mError     = document.getElementById("mError");
+const mError = document.getElementById("mError");
 
 ctxClear?.addEventListener("click", () => clearEditActive());
 
-if (mPlaceWork){
+if (mPlaceWork) {
   mPlaceWork.addEventListener("change", () => setLastPlaceWork(mPlaceWork.value));
 }
 
-function setModalError(text){
+function setModalError(text) {
   if (!mError) return;
   const t = (text || "").trim();
-  if (!t){
+  if (!t) {
     mError.style.display = "none";
     mError.textContent = "";
     return;
@@ -212,7 +212,7 @@ function setModalError(text){
 // ========================================================
 // Load error: close on any click / Escape
 // ========================================================
-function closeLoadError(){
+function closeLoadError() {
   if (!loadErrorEl) return;
   loadErrorEl.style.display = "none";
   loadErrorEl.textContent = "";
@@ -223,29 +223,29 @@ const loadErrorEl = document.getElementById("loadError");
 
 
 
-if (loadErrorEl){
+if (loadErrorEl) {
   // клік будь-де
   document.addEventListener("mousedown", () => {
-    if (loadErrorEl.style.display === "block"){
+    if (loadErrorEl.style.display === "block") {
       closeLoadError();
     }
   });
 
   // Escape
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && loadErrorEl.style.display === "block"){
+    if (e.key === "Escape" && loadErrorEl.style.display === "block") {
       closeLoadError();
     }
   });
 }
 
 
-function showLoadError(text){
+function showLoadError(text) {
   if (!loadErrorEl) return;
   loadErrorEl.textContent = text || "Не вдалося завантажити дані";
   loadErrorEl.style.display = "block";
 }
-function hideLoadError(){
+function hideLoadError() {
   if (!loadErrorEl) return;
   loadErrorEl.style.display = "none";
   loadErrorEl.textContent = "";
@@ -276,13 +276,13 @@ document.addEventListener("keydown", (e) => {
 let loadSpinnerCnt = 0;
 let authSpinnerCnt = 0;
 
-function setSpinnerLabel(rootEl, text){
+function setSpinnerLabel(rootEl, text) {
   const label = rootEl?.querySelector(".label");
   if (label && text) label.textContent = String(text);
 }
 
 /* ---- LOAD spinner (не модальный) ---- */
-function showLoadSpinner(reason, labelText = "Завантаження…"){
+function showLoadSpinner(reason, labelText = "Завантаження…") {
   loadSpinnerCnt++;
   setSpinnerLabel(loadSpinner, labelText);
 
@@ -291,10 +291,10 @@ function showLoadSpinner(reason, labelText = "Завантаження…"){
 
   log("LOAD spinner ON", { cnt: loadSpinnerCnt, reason: reason || "" });
 }
-function hideLoadSpinner(reason){
+function hideLoadSpinner(reason) {
   loadSpinnerCnt = Math.max(0, loadSpinnerCnt - 1);
 
-  if (loadSpinnerCnt === 0){
+  if (loadSpinnerCnt === 0) {
     loadSpinner?.classList.remove("is-on");
     loadSpinner?.setAttribute("aria-hidden", "true");
   }
@@ -303,7 +303,7 @@ function hideLoadSpinner(reason){
 }
 
 /* ---- AUTH spinner (модальный) ---- */
-function showAuthSpinner(reason, labelText = "Авторизація…"){
+function showAuthSpinner(reason, labelText = "Авторизація…") {
   authSpinnerCnt++;
   setSpinnerLabel(authSpinner, labelText);
 
@@ -312,10 +312,10 @@ function showAuthSpinner(reason, labelText = "Авторизація…"){
 
   log("AUTH spinner ON", { cnt: authSpinnerCnt, reason: reason || "" });
 }
-function hideAuthSpinner(reason){
+function hideAuthSpinner(reason) {
   authSpinnerCnt = Math.max(0, authSpinnerCnt - 1);
 
-  if (authSpinnerCnt === 0){
+  if (authSpinnerCnt === 0) {
     authSpinner?.classList.remove("is-on");
     authSpinner?.setAttribute("aria-hidden", "true");
   }
@@ -330,28 +330,28 @@ function hideAuthSpinner(reason){
 const eventDomMap = new Map();
 const savingIds = new Set();
 
-function ensureSpinner(el){
+function ensureSpinner(el) {
   if (!el) return;
   if (getComputedStyle(el).position === "static") el.style.position = "relative";
-  if (!el.querySelector(".dom-spinner")){
+  if (!el.querySelector(".dom-spinner")) {
     const sp = document.createElement("div");
     sp.className = "dom-spinner";
     sp.innerHTML = `<div class="ring"></div>`;
     el.appendChild(sp);
   }
 }
-function removeSpinner(el){ el?.querySelector(".dom-spinner")?.remove(); }
+function removeSpinner(el) { el?.querySelector(".dom-spinner")?.remove(); }
 
-function findEventEl(eventId){
+function findEventEl(eventId) {
   const mapped = eventDomMap.get(eventId);
   if (mapped && document.contains(mapped)) return mapped;
   try { return calendarEl.querySelector(`[data-event-id="${CSS.escape(eventId)}"]`); }
-  catch { return calendarEl.querySelector(`[data-event-id="${String(eventId).replace(/"/g,'\\"')}"]`); }
+  catch { return calendarEl.querySelector(`[data-event-id="${String(eventId).replace(/"/g, '\\"')}"]`); }
 }
 
 let editActiveEventId = null;
-function setEditActive(eventId){
-  if (editActiveEventId){
+function setEditActive(eventId) {
+  if (editActiveEventId) {
     const oldEl = findEventEl(editActiveEventId);
     oldEl?.classList.remove("is-edit-active");
   }
@@ -366,14 +366,14 @@ function setEditActive(eventId){
   requestAnimationFrame(apply);
   requestAnimationFrame(() => requestAnimationFrame(apply));
 }
-function clearEditActive(){ setEditActive(null); }
+function clearEditActive() { setEditActive(null); }
 
-function startSaving(eventId, reason){
+function startSaving(eventId, reason) {
   savingIds.add(eventId);
   ensureSpinner(findEventEl(eventId));
   log("SPINNER ON", eventId, reason || "");
 }
-function stopSaving(eventId, reason){
+function stopSaving(eventId, reason) {
   savingIds.delete(eventId);
   removeSpinner(findEventEl(eventId));
   log("SPINNER OFF", eventId, reason || "");
@@ -382,35 +382,35 @@ function stopSaving(eventId, reason){
 // ========================================================
 // [8] Error markers on events
 // ========================================================
-function markCreateError(ev){ findEventEl(ev.id)?.classList.add("is-create-error"); }
-function clearCreateError(ev){ findEventEl(ev.id)?.classList.remove("is-create-error"); }
-function applyCreateErrorText(ev, msg){
+function markCreateError(ev) { findEventEl(ev.id)?.classList.add("is-create-error"); }
+function clearCreateError(ev) { findEventEl(ev.id)?.classList.remove("is-create-error"); }
+function applyCreateErrorText(ev, msg) {
   ev.setExtendedProp("__create_error", normalizeErrMessage(msg));
   ev.setExtendedProp("__create_error_short", shortErr(msg));
   markCreateError(ev);
 }
 
-function markUpdateError(ev){ findEventEl(ev.id)?.classList.add("is-update-error"); }
-function clearUpdateError(ev){ findEventEl(ev.id)?.classList.remove("is-update-error"); }
-function applyUpdateErrorText(ev, msg){
+function markUpdateError(ev) { findEventEl(ev.id)?.classList.add("is-update-error"); }
+function clearUpdateError(ev) { findEventEl(ev.id)?.classList.remove("is-update-error"); }
+function applyUpdateErrorText(ev, msg) {
   ev.setExtendedProp("__update_error", normalizeErrMessage(msg));
   ev.setExtendedProp("__update_error_short", shortErr(msg));
   markUpdateError(ev);
 }
-function clearUpdateErrorText(ev){
+function clearUpdateErrorText(ev) {
   ev.setExtendedProp("__update_error", "");
   ev.setExtendedProp("__update_error_short", "");
   clearUpdateError(ev);
 }
 
-function markDeleteError(ev){ findEventEl(ev.id)?.classList.add("is-delete-error"); }
-function clearDeleteError(ev){ findEventEl(ev.id)?.classList.remove("is-delete-error"); }
-function applyDeleteErrorText(ev, msg){
+function markDeleteError(ev) { findEventEl(ev.id)?.classList.add("is-delete-error"); }
+function clearDeleteError(ev) { findEventEl(ev.id)?.classList.remove("is-delete-error"); }
+function applyDeleteErrorText(ev, msg) {
   ev.setExtendedProp("__delete_error", normalizeErrMessage(msg));
   ev.setExtendedProp("__delete_error_short", shortErr(msg));
   markDeleteError(ev);
 }
-function clearDeleteErrorText(ev){
+function clearDeleteErrorText(ev) {
   ev.setExtendedProp("__delete_error", "");
   ev.setExtendedProp("__delete_error_short", "");
   clearDeleteError(ev);
@@ -419,19 +419,19 @@ function clearDeleteErrorText(ev){
 // ========================================================
 // [9] API urls + helpers
 // ========================================================
-const API_LIST_URL   = "https://webclient.it-enterprise.com/ws/api/_PLUTEST_GET";
+const API_LIST_URL = "https://webclient.it-enterprise.com/ws/api/_PLUTEST_GET";
 const API_CREATE_URL = "https://webclient.it-enterprise.com/ws/api/_PLUTEST_ADD";
 const API_UPDATE_URL = "https://webclient.it-enterprise.com/ws/api/_PLUTEST_UPD";
 const API_DELETE_URL = "https://webclient.it-enterprise.com/ws/api/_PLUTEST_DEL";
-const API_SKD_URL    = "https://webclient.it-enterprise.com/ws/api/_PLUTEST_GETSKD";
-const API_PLD_URL    = "https://webclient.it-enterprise.com/ws/api/_PLUTEST_GETPLD";
+const API_SKD_URL = "https://webclient.it-enterprise.com/ws/api/_PLUTEST_GETSKD";
+const API_PLD_URL = "https://webclient.it-enterprise.com/ws/api/_PLUTEST_GETPLD";
 
-async function readApiJson(resp, opName){
+async function readApiJson(resp, opName) {
   const ct = (resp.headers.get("content-type") || "").toLowerCase();
   if (ct.includes("application/json") || ct.includes("text/json") || ct.includes("+json")) {
     try { return await resp.json(); }
-    catch (e){
-      const raw = await resp.text().catch(()=> "");
+    catch (e) {
+      const raw = await resp.text().catch(() => "");
       throw new Error(`${opName}: invalid JSON: ${normalizeErrMessage(e)} | raw: ${raw}`);
     }
   }
@@ -440,9 +440,9 @@ async function readApiJson(resp, opName){
   catch { throw new Error(`${opName}: expected JSON, got: ${raw}`); }
 }
 
-function normalizeApiResult(obj){
-  if (!obj || typeof obj !== "object"){
-    return { Success:false, Id:0, MessageError:"Некоректна відповідь сервера", objCode:"", kzajCode:"" };
+function normalizeApiResult(obj) {
+  if (!obj || typeof obj !== "object") {
+    return { Success: false, Id: 0, MessageError: "Некоректна відповідь сервера", objCode: "", kzajCode: "" };
   }
   const Success = Boolean(obj.Success ?? obj.success ?? false);
   const Id = Number(obj.Id ?? obj.id ?? 0) || 0;
@@ -451,7 +451,7 @@ function normalizeApiResult(obj){
   const kzajCode = String(obj.PluObj?.kzajCode ?? obj.kzajCode ?? "").trim();
   return { Success, Id, MessageError, objCode, kzajCode };
 }
-function throwIfNotSuccess(opName, res){
+function throwIfNotSuccess(opName, res) {
   if (res.Success) return;
   throw new Error(res.MessageError || `${opName}: Success=false`);
 }
@@ -468,7 +468,7 @@ let acItems = [];
 let acActive = -1;
 let acOpen = false;
 
-function buildPldInputText(it){
+function buildPldInputText(it) {
   const k = String(it?.kpld ?? "").trim();
   const obj = String(it?.pldObjCode ?? "").trim();
   const kz = String(it?.pldKzaj ?? "").trim();
@@ -486,13 +486,13 @@ function buildPldInputText(it){
   return `${head} — ${n}`;
 }
 
-function pldSet(kpld, labelText){
+function pldSet(kpld, labelText) {
   const k = (kpld === "" || kpld === null || kpld === undefined) ? "" : String(Number(kpld) || "");
   mKpld.value = k;
   mKpldText.value = labelText || (k ? k : "");
 }
 
-function pldHideList(){
+function pldHideList() {
   acOpen = false;
   acItems = [];
   acActive = -1;
@@ -500,12 +500,12 @@ function pldHideList(){
   mKpldList.innerHTML = "";
 }
 
-function acUpdateActive(){
+function acUpdateActive() {
   const els = [...mKpldList.querySelectorAll(".ac-item")];
   els.forEach((el, i) => el.classList.toggle("is-active", i === acActive));
 
   const activeEl = els[acActive];
-  if (activeEl){
+  if (activeEl) {
     const list = mKpldList;
     const top = activeEl.offsetTop;
     const bottom = top + activeEl.offsetHeight;
@@ -514,7 +514,7 @@ function acUpdateActive(){
   }
 }
 
-function acPickIndex(i){
+function acPickIndex(i) {
   if (i < 0 || i >= acItems.length) return;
   const it = acItems[i];
 
@@ -527,11 +527,11 @@ function acPickIndex(i){
   window.updateKpldClearVisibility?.();
 }
 
-function pldRenderList(items){
+function pldRenderList(items) {
   acItems = Array.isArray(items) ? items : [];
   acOpen = true;
 
-  if (!acItems.length){
+  if (!acItems.length) {
     mKpldList.innerHTML = `<div class="ac-empty">Нічого не знайдено</div>`;
     mKpldList.style.display = "block";
     acActive = -1;
@@ -540,7 +540,7 @@ function pldRenderList(items){
 
   mKpldList.innerHTML = acItems.map(it => {
     const kpld = escapeHtml(String(it.kpld ?? ""));
-    const obj  = escapeHtml(String(it.pldObjCode ?? ""));
+    const obj = escapeHtml(String(it.pldObjCode ?? ""));
     const kzaj = escapeHtml(String(it.pldKzaj ?? ""));
     const name = escapeHtml(String(it.npld ?? ""));
 
@@ -568,7 +568,7 @@ function pldRenderList(items){
   acUpdateActive();
 }
 
-async function apiGetPld({ q = "", kpld = "" } = {}){
+async function apiGetPld({ q = "", kpld = "" } = {}) {
   let params = new URLSearchParams();
   params.set("q", q ? String(q) : "");
   params.set("kpld", (kpld !== "" && kpld != null) ? String(kpld) : "0");
@@ -577,7 +577,7 @@ async function apiGetPld({ q = "", kpld = "" } = {}){
   const url = `${API_PLD_URL}?${params.toString()}`;
   log("API PLD ->", url);
 
-  const resp = await fetch(url, { method:"GET", headers:{ "accept":"application/json" } });
+  const resp = await fetch(url, { method: "GET", headers: { "accept": "application/json" } });
   const text = await resp.text();
   log("API PLD <- HTTP", resp.status, "raw:", text);
 
@@ -585,7 +585,7 @@ async function apiGetPld({ q = "", kpld = "" } = {}){
 
   let arr;
   try { arr = JSON.parse(text); }
-  catch(e){ throw new Error("API PLD invalid JSON: " + String(e) + " | raw: " + text); }
+  catch (e) { throw new Error("API PLD invalid JSON: " + String(e) + " | raw: " + text); }
 
   if (!Array.isArray(arr)) throw new Error("API PLD expected array");
 
@@ -600,91 +600,91 @@ async function apiGetPld({ q = "", kpld = "" } = {}){
     .filter(x => x.kpld);
 }
 
-async function pldLoadAll(){
-  try{
+async function pldLoadAll() {
+  try {
     const items = await apiGetPld({ q: "" });
     items.forEach(it => pldCache.set(String(it.kpld), { ...it, labelText: buildPldInputText(it) }));
     pldRenderList(items);
-  } catch(e){
+  } catch (e) {
     err("PLD loadAll failed:", e);
     pldHideList();
   }
 }
-async function pldSearch(q){
+async function pldSearch(q) {
   const s = (q || "").trim();
-  try{
+  try {
     const items = await apiGetPld({ q: s });
     items.forEach(it => pldCache.set(String(it.kpld), { ...it, labelText: buildPldInputText(it) }));
     pldRenderList(items);
-  } catch(e){
+  } catch (e) {
     err("PLD search failed:", e);
     pldHideList();
   }
 }
-async function pldPrefillByKpld(kpld){
+async function pldPrefillByKpld(kpld) {
   const k = String(Number(kpld) || "");
-  if (!k){
+  if (!k) {
     pldSet("", "");
     pldHideList();
     return;
   }
-  if (pldCache.has(k)){
+  if (pldCache.has(k)) {
     const hit = pldCache.get(k);
     pldSet(k, hit?.labelText || k);
     return;
   }
-  try{
+  try {
     const items = await apiGetPld({ kpld: k });
     const hit = items.find(x => String(x.kpld) === k) || items[0];
-    if (hit){
+    if (hit) {
       const labelText = buildPldInputText(hit);
       pldCache.set(k, { ...hit, labelText });
       pldSet(hit.kpld, labelText);
       return;
     }
-  } catch {}
-  try{
+  } catch { }
+  try {
     const items = await apiGetPld({ q: k });
     const hit = items.find(x => String(x.kpld) === k) || items[0];
-    if (hit){
+    if (hit) {
       const labelText = buildPldInputText(hit);
       pldCache.set(k, { ...hit, labelText });
       pldSet(hit.kpld, labelText);
       return;
     }
-  } catch(e){ err("PLD prefill failed:", e); }
+  } catch (e) { err("PLD prefill failed:", e); }
   pldSet(k, k);
 }
-async function pldShowSelected(){
+async function pldShowSelected() {
   const k = String(Number(mKpld.value || 0) || "");
   if (!k) return;
 
-  if (pldCache.has(k)){
+  if (pldCache.has(k)) {
     pldRenderList([pldCache.get(k)]);
     return;
   }
-  try{
+  try {
     const items = await apiGetPld({ kpld: k });
-    if (items.length){
+    if (items.length) {
       const hit = items.find(x => String(x.kpld) === k) || items[0];
       const labelText = buildPldInputText(hit);
       pldCache.set(k, { ...hit, labelText });
       pldRenderList([hit]);
       return;
     }
-  } catch(e){ err("PLD showSelected failed:", e); }
-  pldRenderList([{ kpld: Number(k), npld: "", pldObjCode:"", pldKzaj:"" }]);
+  } catch (e) { err("PLD showSelected failed:", e); }
+  pldRenderList([{ kpld: Number(k), npld: "", pldObjCode: "", pldKzaj: "" }]);
 }
 
-function initPldUI(){
+function initPldUI() {
   if (!mKpldText || !mKpldList || !mKpld) return;
 
   mKpldText.addEventListener("focus", () => {
     const val = (mKpldText.value || "").trim();
     const hasSelected = !!mKpld.value;
 
-    if (hasSelected){ pldShowSelected(); return; }
-    if (!val){ pldLoadAll(); return; }
+    if (hasSelected) { pldShowSelected(); return; }
+    if (!val) { pldLoadAll(); return; }
 
     clearTimeout(pldDebTimer);
     pldDebTimer = setTimeout(() => pldSearch(val), 0);
@@ -704,8 +704,8 @@ function initPldUI(){
   });
 
   mKpldText.addEventListener("keydown", (e) => {
-    if (!acOpen || mKpldList.style.display === "none"){
-      if (e.key === "ArrowDown"){
+    if (!acOpen || mKpldList.style.display === "none") {
+      if (e.key === "ArrowDown") {
         e.preventDefault();
         const val = (mKpldText.value || "").trim();
         if (!val && !mKpld.value) pldLoadAll();
@@ -713,28 +713,28 @@ function initPldUI(){
       }
       return;
     }
-    if (e.key === "ArrowDown"){
+    if (e.key === "ArrowDown") {
       e.preventDefault();
       if (!acItems.length) return;
       acActive = Math.min(acItems.length - 1, acActive + 1);
       acUpdateActive();
       return;
     }
-    if (e.key === "ArrowUp"){
+    if (e.key === "ArrowUp") {
       e.preventDefault();
       if (!acItems.length) return;
       acActive = Math.max(0, acActive - 1);
       acUpdateActive();
       return;
     }
-    if (e.key === "Enter"){
-      if (acActive >= 0 && acActive < acItems.length){
+    if (e.key === "Enter") {
+      if (acActive >= 0 && acActive < acItems.length) {
         e.preventDefault();
         acPickIndex(acActive);
       }
       return;
     }
-    if (e.key === "Escape"){
+    if (e.key === "Escape") {
       e.preventDefault();
       pldHideList();
       return;
@@ -745,7 +745,7 @@ function initPldUI(){
     setTimeout(() => {
       pldHideList();
       const raw = (mKpldText.value || "").trim();
-      if (raw && !mKpld.value){
+      if (raw && !mKpld.value) {
         const guess = raw.match(/^\s*(\d+)\b/)?.[1] || "";
         if (/^\d+$/.test(guess)) pldPrefillByKpld(guess);
       }
@@ -753,7 +753,7 @@ function initPldUI(){
   });
 
   document.addEventListener("mousedown", (e) => {
-    if (!mKpldList.contains(e.target) && e.target !== mKpldText){
+    if (!mKpldList.contains(e.target) && e.target !== mKpldText) {
       pldHideList();
     }
   });
@@ -761,14 +761,14 @@ function initPldUI(){
   // clear button
   const mKpldClear = document.getElementById("mKpldClear");
 
-  function updateKpldClearVisibility(){
+  function updateKpldClearVisibility() {
     if (!mKpldClear) return;
     const hasValue = !!(mKpld.value || mKpldText.value.trim());
     mKpldClear.style.display = hasValue ? "block" : "none";
   }
   window.updateKpldClearVisibility = updateKpldClearVisibility;
 
-  if (mKpldClear){
+  if (mKpldClear) {
     mKpldClear.addEventListener("click", () => {
       mKpld.value = "";
       mKpldText.value = "";
@@ -783,13 +783,13 @@ initPldUI();
 // ========================================================
 // [11] API calls LIST/SKD/CREATE/UPDATE/DELETE
 // ========================================================
-async function apiGetListJobs(dateFrom, dateTo, signal){
+async function apiGetListJobs(dateFrom, dateTo, signal) {
   const params = withAuthParams({ dateFrom, dateTo });
   const url = `${API_LIST_URL}?${params.toString()}`;
 
   log("API LIST ->", url);
 
-  const resp = await fetch(url, { method:"GET", headers:{ "accept":"application/json" }, signal });
+  const resp = await fetch(url, { method: "GET", headers: { "accept": "application/json" }, signal });
   const text = await resp.text();
   log("API LIST <- HTTP", resp.status, "raw:", text);
 
@@ -797,7 +797,7 @@ async function apiGetListJobs(dateFrom, dateTo, signal){
 
   let arr;
   try { arr = JSON.parse(text); }
-  catch(e){ throw new Error("API LIST invalid JSON: " + String(e) + " | raw: " + text); }
+  catch (e) { throw new Error("API LIST invalid JSON: " + String(e) + " | raw: " + text); }
 
   if (!Array.isArray(arr)) throw new Error("API LIST expected array");
 
@@ -821,16 +821,16 @@ async function apiGetListJobs(dateFrom, dateTo, signal){
     );
 }
 
-function parseIsoDateTime(s){
+function parseIsoDateTime(s) {
   const d = new Date(String(s || ""));
   return isNaN(d.getTime()) ? null : d;
 }
-async function apiGetSkd(dateFrom, dateTo, signal){
+async function apiGetSkd(dateFrom, dateTo, signal) {
   const params = withAuthParams({ dateFrom, dateTo });
   const url = `${API_SKD_URL}?${params.toString()}`;
   log("API SKD ->", url);
 
-  const resp = await fetch(url, { method:"GET", headers:{ "accept":"application/json" }, signal });
+  const resp = await fetch(url, { method: "GET", headers: { "accept": "application/json" }, signal });
   const text = await resp.text();
   log("API SKD <- HTTP", resp.status, "raw:", text);
 
@@ -838,7 +838,7 @@ async function apiGetSkd(dateFrom, dateTo, signal){
 
   let arr;
   try { arr = JSON.parse(text); }
-  catch(e){ throw new Error("API SKD invalid JSON: " + String(e) + " | raw: " + text); }
+  catch (e) { throw new Error("API SKD invalid JSON: " + String(e) + " | raw: " + text); }
 
   if (!Array.isArray(arr)) throw new Error("API SKD expected array");
 
@@ -846,18 +846,18 @@ async function apiGetSkd(dateFrom, dateTo, signal){
     .filter(x => x && typeof x === "object")
     .map(x => ({
       from: parseIsoDateTime(x.DateFrom ?? x.dateFrom ?? x.from),
-      to:   parseIsoDateTime(x.DateTo   ?? x.dateTo   ?? x.to)
+      to: parseIsoDateTime(x.DateTo ?? x.dateTo ?? x.to)
     }))
     .filter(x => x.from && x.to);
 }
 
-function skdIntervalsToMarkerEvents(items){
+function skdIntervalsToMarkerEvents(items) {
   const ONE_MIN = 60 * 1000;
   const out = [];
-  for (let i=0; i<items.length; i++){
+  for (let i = 0; i < items.length; i++) {
     const it = items[i];
     const fromTxt = fmtTime(it.from);
-    const toTxt   = fmtTime(it.to);
+    const toTxt = fmtTime(it.to);
 
     out.push({
       id: `skd-from-${i}-${it.from.getTime()}`,
@@ -882,26 +882,26 @@ function skdIntervalsToMarkerEvents(items){
   return out;
 }
 
-async function apiCreateJob(payload){
+async function apiCreateJob(payload) {
   const params = withAuthParams(new URLSearchParams());
   const url = `${API_CREATE_URL}?${params.toString()}`;
 
   log("API CREATE ->", url, payload);
 
   let resp;
-  try{
+  try {
     resp = await fetch(url, {
-      method:"POST",
-      headers:{ "accept":"application/json", "Content-Type":"application/json" },
-      body: JSON.stringify({Record:payload})
+      method: "POST",
+      headers: { "accept": "application/json", "Content-Type": "application/json" },
+      body: JSON.stringify({ Record: payload })
     });
-  } catch(fetchErr){
+  } catch (fetchErr) {
     throw new Error("Немає доступу до API: " + normalizeErrMessage(fetchErr));
   }
 
   let json;
   try { json = await readApiJson(resp, "API CREATE"); }
-  catch(e){ throw new Error(`API CREATE HTTP ${resp.status}: ${normalizeErrMessage(e)}`); }
+  catch (e) { throw new Error(`API CREATE HTTP ${resp.status}: ${normalizeErrMessage(e)}`); }
 
   const res = normalizeApiResult(json);
   log("API CREATE <- HTTP", resp.status, "json:", res);
@@ -913,26 +913,26 @@ async function apiCreateJob(payload){
   return { id: String(res.Id), objCode: res.objCode ?? "", kzajCode: res.kzajCode ?? "" };
 }
 
-async function apiUpdateJob(payload){
+async function apiUpdateJob(payload) {
   const params = withAuthParams(new URLSearchParams());
   const url = `${API_UPDATE_URL}?${params.toString()}`;
 
   log("API UPDATE ->", url, payload);
 
   let resp;
-  try{
+  try {
     resp = await fetch(url, {
-      method:"POST",
-      headers:{ "accept":"application/json", "Content-Type":"application/json" },
-      body: JSON.stringify({Record: payload})
+      method: "POST",
+      headers: { "accept": "application/json", "Content-Type": "application/json" },
+      body: JSON.stringify({ Record: payload })
     });
-  } catch(fetchErr){
+  } catch (fetchErr) {
     throw new Error("Немає доступу до API: " + normalizeErrMessage(fetchErr));
   }
 
   let json;
   try { json = await readApiJson(resp, "API UPDATE"); }
-  catch(e){ throw new Error(`API UPDATE HTTP ${resp.status}: ${normalizeErrMessage(e)}`); }
+  catch (e) { throw new Error(`API UPDATE HTTP ${resp.status}: ${normalizeErrMessage(e)}`); }
 
   const res = normalizeApiResult(json);
   log("API UPDATE <- HTTP", resp.status, "json:", res);
@@ -943,22 +943,22 @@ async function apiUpdateJob(payload){
   return { objCode: res?.objCode ?? "", kzajCode: res?.kzajCode ?? "" };
 }
 
-async function apiDeleteJob(id){
+async function apiDeleteJob(id) {
   const params = withAuthParams({ Id: String(id) });
   const url = `${API_DELETE_URL}?${params.toString()}`;
 
   log("API DELETE ->", url);
 
   let resp;
-  try{
-    resp = await fetch(url, { method:"POST", headers:{ "accept":"application/json" } });
-  } catch(fetchErr){
+  try {
+    resp = await fetch(url, { method: "POST", headers: { "accept": "application/json" } });
+  } catch (fetchErr) {
     throw new Error("Немає доступу до API: " + normalizeErrMessage(fetchErr));
   }
 
   let json;
   try { json = await readApiJson(resp, "API DELETE"); }
-  catch(e){ throw new Error(`API DELETE HTTP ${resp.status}: ${normalizeErrMessage(e)}`); }
+  catch (e) { throw new Error(`API DELETE HTTP ${resp.status}: ${normalizeErrMessage(e)}`); }
 
   const res = normalizeApiResult(json);
   log("API DELETE <- HTTP", resp.status, "json:", res);
@@ -972,12 +972,12 @@ async function apiDeleteJob(id){
 // ========================================================
 // [12] Unified model + mappings
 // ========================================================
-function buildTitle(model){
-  return `<span class="ev-obj-code">${String(model.objCode||"")}</span> ` +
-         `<span class="ev-kzaj-code">${String(model.kzajCode||"")}</span> ` +
-         `${String(model.description||"")}`;
+function buildTitle(model) {
+  return `<span class="ev-obj-code">${String(model.objCode || "")}</span> ` +
+    `<span class="ev-kzaj-code">${String(model.kzajCode || "")}</span> ` +
+    `${String(model.description || "")}`;
 }
-function ensureErrorProps(ep){
+function ensureErrorProps(ep) {
   return {
     __create_error: ep?.__create_error || "",
     __create_error_short: ep?.__create_error_short || "",
@@ -987,15 +987,15 @@ function ensureErrorProps(ep){
     __delete_error_short: ep?.__delete_error_short || "",
   };
 }
-function scrubTempProps(ep){
+function scrubTempProps(ep) {
   if (!ep) return;
   delete ep.__pending_create;
   delete ep.__create_error;
   delete ep.__create_error_short;
 }
-function modelFromJob(job){
+function modelFromJob(job) {
   const start = new Date(job.date + "T" + job.time_from + ":00");
-  const end   = new Date(job.date + "T" + job.time_to   + ":00");
+  const end = new Date(job.date + "T" + job.time_to + ":00");
   return {
     id: String(job.id),
     start, end,
@@ -1007,7 +1007,7 @@ function modelFromJob(job){
     errors: ensureErrorProps({})
   };
 }
-function modelFromEvent(ev){
+function modelFromEvent(ev) {
   const ep = ev.extendedProps || {};
   return {
     id: String(ev.id || ""),
@@ -1022,9 +1022,9 @@ function modelFromEvent(ev){
     __pending_create: !!ep.__pending_create
   };
 }
-function payloadFromModel(m){
+function payloadFromModel(m) {
   return {
-    id: Number(String(m.id).replace(/[^\d]/g,"")) || 0,
+    id: Number(String(m.id).replace(/[^\d]/g, "")) || 0,
     time_from: fmtTime(m.start),
     time_to: fmtTime(m.end),
     date: isoDate(m.start),
@@ -1035,7 +1035,7 @@ function payloadFromModel(m){
     placeWork: String(m.placeWork || "").trim()
   };
 }
-function applyModelToEvent(ev, m){
+function applyModelToEvent(ev, m) {
   ev.setStart(m.start);
   ev.setEnd(m.end);
   ev.setProp("title", buildTitle(m));
@@ -1054,7 +1054,7 @@ function applyModelToEvent(ev, m){
   ev.setExtendedProp("__delete_error", e.__delete_error || "");
   ev.setExtendedProp("__delete_error_short", e.__delete_error_short || "");
 }
-function modelToEventInput(m){
+function modelToEventInput(m) {
   return {
     id: String(m.id),
     title: buildTitle(m),
@@ -1070,7 +1070,7 @@ function modelToEventInput(m){
     }
   };
 }
-function jobToEvent(job){ return modelToEventInput(modelFromJob(job)); }
+function jobToEvent(job) { return modelToEventInput(modelFromJob(job)); }
 
 // ========================================================
 // [13] Modal open/close + validation
@@ -1079,17 +1079,17 @@ let modalMode = null;   // 'create' | 'edit'
 let currentEvent = null;
 let pendingCreate = null;
 
-function fillModalWhen(start, end){
+function fillModalWhen(start, end) {
   mWhen.textContent = formatWhenWithDuration(start, end);
   mDate.value = isoDate(start);
   mFrom.value = fmtTime(start);
   mTo.value = fmtTime(end);
 }
 
-function openModal(mode, payload){
+function openModal(mode, payload) {
   modalMode = mode;
 
-  if (mode === "edit"){
+  if (mode === "edit") {
     currentEvent = payload.event;
     setEditActive(currentEvent?.id);
     pendingCreate = null;
@@ -1110,14 +1110,14 @@ function openModal(mode, payload){
     const del = currentEvent.extendedProps?.__delete_error || "";
     const text = payload?.errorText || del || upd || "";
 
-    if (mPlaceWork){
+    if (mPlaceWork) {
       const pw = String(currentEvent.extendedProps?.placeWork || "").trim();
       mPlaceWork.value = pw || "";
     }
 
     setModalError(text ? ("⚠️ " + text) : "");
   } else {
-    if (mPlaceWork){
+    if (mPlaceWork) {
       const fromPayload = String(payload?.placeWork || "").trim();
       const last = getLastPlaceWork();
       mPlaceWork.value = (fromPayload || last || "");
@@ -1142,14 +1142,14 @@ function openModal(mode, payload){
   }
 
   backdrop.style.display = "flex";
-  backdrop.setAttribute("aria-hidden","false");
+  backdrop.setAttribute("aria-hidden", "false");
   window.updateKpldClearVisibility?.();
   setTimeout(() => mDescription.focus(), 0);
 }
 
-function closeModal(){
+function closeModal() {
   backdrop.style.display = "none";
-  backdrop.setAttribute("aria-hidden","true");
+  backdrop.setAttribute("aria-hidden", "true");
   setModalError("");
   currentEvent = null;
   pendingCreate = null;
@@ -1166,17 +1166,17 @@ backdrop.addEventListener("mousedown", (e) => {
   if (e.target === backdrop) closeModal();
 });
 
-function getStartEndFromModal(){
+function getStartEndFromModal() {
   const start0 = combineDateTime(mDate.value, mFrom.value);
-  const end0   = combineDateTime(mDate.value, mTo.value);
-  if (!start0 || !end0) return { ok:false, error:"Некоректна дата/час." };
-  if (!isWithinSingleDay(start0, end0)) return { ok:false, error:"Має бути в межах одного дня." };
+  const end0 = combineDateTime(mDate.value, mTo.value);
+  if (!start0 || !end0) return { ok: false, error: "Некоректна дата/час." };
+  if (!isWithinSingleDay(start0, end0)) return { ok: false, error: "Має бути в межах одного дня." };
   const diff = minutesDiff(start0, end0);
-  if (diff <= 0) return { ok:false, error:"Час «по» має бути більшим за «з»." };
-  return { ok:true, start: start0, end: end0 };
+  if (diff <= 0) return { ok: false, error: "Час «по» має бути більшим за «з»." };
+  return { ok: true, start: start0, end: end0 };
 }
 
-function refreshWhenPreview(){
+function refreshWhenPreview() {
   const res = getStartEndFromModal();
   if (!res.ok) return;
   mWhen.textContent = formatWhenWithDuration(res.start, res.end);
@@ -1189,7 +1189,7 @@ window.__erpRefreshWhenPreview = refreshWhenPreview;
 // ========================================================
 // [14] Confirm delete (2nd modal)
 // ========================================================
-function confirmDelete(){
+function confirmDelete() {
   return new Promise(resolve => {
     const b = document.getElementById("confirmBackdrop");
     const okBtn = document.getElementById("confirmOk");
@@ -1216,21 +1216,21 @@ function confirmDelete(){
 // [15] AUTH init (PROD): ERPAuth uses app toast
 // ========================================================
 let auth = null;
-let _setLoginBtnText = (text) => {};
+let _setLoginBtnText = (text) => { };
 
 auth = ERPAuth.init({
   apiBase: "https://webclient.it-enterprise.com",
   setButtonText: (text) => _setLoginBtnText(text),
-  toast: (message, type="error", title="Повідомлення", ms=4500) => toast(message, type, title, ms),
+  toast: (message, type = "error", title = "Повідомлення", ms = 4500) => toast(message, type, title, ms),
 
-    // ✅ ДОБАВЬ ЭТО:
+  // ✅ ДОБАВЬ ЭТО:
   setSpinner: (isOn, labelText, { modal } = {}) => {
     const sp = document.getElementById("pageSpinner");
     const label = sp?.querySelector(".label");
     if (label && labelText) label.textContent = String(labelText);
 
     if (isOn) showAuthSpinner("auth", labelText || "Авторизація…");
-    else      hideAuthSpinner("auth");
+    else hideAuthSpinner("auth");
   },
 
   confirmLogout: async () => {
@@ -1243,7 +1243,7 @@ auth = ERPAuth.init({
   },
 
   onLoginChanged: async ({ isLoggedIn }) => {
-    if (!isLoggedIn){
+    if (!isLoggedIn) {
       setEventsSafe([]);
       hideLoadError();
       return;
@@ -1267,7 +1267,7 @@ let pendingEventsToSet = null;
 // ========================================================
 let rangeLoadPromise = Promise.resolve();
 
-function setEventsSafe(events){
+function setEventsSafe(events) {
   if (widgetRef) widgetRef.setEvents(events);
   else pendingEventsToSet = events;
 }
@@ -1277,17 +1277,17 @@ function setEventsSafe(events){
 // ========================================================
 
 
-function buildNetworkMessage(e){
-  if (e?.name === "AbortError"){
+function buildNetworkMessage(e) {
+  if (e?.name === "AbortError") {
     return "Таймаут 15 сек: сервер довго відповідає (PLU\\SKD не завантажено)\nПеревірте, що ви знаходитесь у внутрішній мережі IT-Enterprise";
   }
-  if (e?.message === "Failed to fetch"){
+  if (e?.message === "Failed to fetch") {
     return "Не вдалось отримати доступ до серверу ITA\nПеревірте, що ви знаходитесь у внутрішній мережі IT-Enterprise";
   }
   return "Не вдалось отримати доступ до серверу ITA\nПеревірте, що ви знаходитесь у внутрішній мережі IT-Enterprise\nПомилка: " + (e?.message || e);
 }
 
-async function fetchEventsForRange(from, to, signal){
+async function fetchEventsForRange(from, to, signal) {
   const [jobs, skd] = await Promise.all([
     apiGetListJobs(from, to, signal),
     apiGetSkd(from, to, signal),
@@ -1295,13 +1295,13 @@ async function fetchEventsForRange(from, to, signal){
   return [...jobs.map(jobToEvent), ...skdIntervalsToMarkerEvents(skd)];
 }
 
-async function loadRangeAndRender({ from, to, reason = "" }){
+async function loadRangeAndRender({ from, to, reason = "" }) {
   showLoadSpinner(reason || "load", "Завантаження…");
   const ac = new AbortController();
   const timer = setTimeout(() => ac.abort(), 15000);
 
-  try{
-    if (!auth.isLoggedIn()){
+  try {
+    if (!auth.isLoggedIn()) {
       setEventsSafe([]);
       hideLoadError();
       return;
@@ -1310,7 +1310,7 @@ async function loadRangeAndRender({ from, to, reason = "" }){
     const events = await fetchEventsForRange(from, to, ac.signal);
     setEventsSafe(events);
     hideLoadError();
-  } catch(e){
+  } catch (e) {
     err("LOAD failed:", e);
     showLoadError(buildNetworkMessage(e));
   } finally {
@@ -1325,13 +1325,13 @@ async function loadRangeAndRender({ from, to, reason = "" }){
 const widget = new ERPDayCalendar("#calendar", {
   ctx: { el: ctx, hintEl: ctxHint, btnCreate: ctxCreate, btnClear: ctxClear },
 
-onRangeChanged: ({ from, to }) => {
-  // ВАЖНО: сохраняем promise, чтобы другие места могли "await rangeLoadPromise"
-  rangeLoadPromise = loadRangeAndRender({ from, to, reason: "datesSet" });
-  return rangeLoadPromise;
-},
+  onRangeChanged: ({ from, to }) => {
+    // ВАЖНО: сохраняем promise, чтобы другие места могли "await rangeLoadPromise"
+    rangeLoadPromise = loadRangeAndRender({ from, to, reason: "datesSet" });
+    return rangeLoadPromise;
+  },
   onRefreshClick: async () => {
-    if (!auth.isLoggedIn()){
+    if (!auth.isLoggedIn()) {
       toast("Для оновлення потрібно залогінитись.", "warn", "🔐 Потрібен вхід");
       return;
     }
@@ -1351,7 +1351,7 @@ onRangeChanged: ({ from, to }) => {
     if (event.extendedProps?.__skd_marker) return;
     if (!await requireLogin()) return;
 
-    if (isTempId(event.id)){
+    if (isTempId(event.id)) {
       openModal("create", {
         start: event.start,
         end: event.end,
@@ -1371,31 +1371,31 @@ onRangeChanged: ({ from, to }) => {
     openModal("edit", { event, errorText: del || upd || "" });
   },
 
-onEventMovedOrResized: async ({ event, revert }) => {
-  if (event.extendedProps?.__skd_marker) return;
+  onEventMovedOrResized: async ({ event, revert }) => {
+    if (event.extendedProps?.__skd_marker) return;
 
-  if (!await requireLogin()){
-    revert?.();
-    return;
-  }
-  if (isTempId(event.id)) return;
+    if (!await requireLogin()) {
+      revert?.();
+      return;
+    }
+    if (isTempId(event.id)) return;
 
-  // ✅ 1) во время и после drag/resize считаем событие "активным"
-  widget.unselect();          // чтобы не оставалось чужих выделений
-  setEditActive(event.id);    // сразу подсветить как active (тёмно-синий)
+    // ✅ 1) во время и после drag/resize считаем событие "активным"
+    widget.unselect();          // чтобы не оставалось чужих выделений
+    setEditActive(event.id);    // сразу подсветить как active (тёмно-синий)
 
-  await safeUpdateEvent(event);
+    await safeUpdateEvent(event);
 
-  // ✅ 2) иногда DOM пересоздаётся после update/перерендера — повторяем фиксацию
-  //requestAnimationFrame(() => setEditActive(event.id));
-},
+    // ✅ 2) иногда DOM пересоздаётся после update/перерендера — повторяем фиксацию
+    //requestAnimationFrame(() => setEditActive(event.id));
+  },
 
 
   onEventDidMount: (info) => {
     info.el.dataset.eventId = info.event.id;
     eventDomMap.set(info.event.id, info.el);
 
-    if (editActiveEventId && info.event.id === editActiveEventId){
+    if (editActiveEventId && info.event.id === editActiveEventId) {
       info.el.classList.add("is-edit-active");
     }
     if (savingIds.has(info.event.id)) ensureSpinner(info.el);
@@ -1413,10 +1413,10 @@ onEventMovedOrResized: async ({ event, revert }) => {
       info.el.dataset.deleteError = info.event.extendedProps?.__delete_error_short || "Помилка";
     }
 
-    if (info.event.extendedProps?.__skd_marker){
+    if (info.event.extendedProps?.__skd_marker) {
       const labelText = info.event.extendedProps?.__skd_label || "СКД";
       const harness = info.el.closest(".fc-timegrid-bg-harness");
-      if (harness){
+      if (harness) {
         harness.classList.add("skd-marker");
         if (info.event.classNames?.includes("skd-to")) harness.classList.add("skd-to");
         if (info.event.classNames?.includes("skd-from")) harness.classList.add("skd-from");
@@ -1435,7 +1435,7 @@ onEventMovedOrResized: async ({ event, revert }) => {
 // [19] AUTH <-> WIDGET
 // ========================================================
 widgetRef = widget;
-if (pendingEventsToSet !== null){
+if (pendingEventsToSet !== null) {
   widgetRef.setEvents(pendingEventsToSet);
   pendingEventsToSet = null;
 }
@@ -1443,7 +1443,7 @@ if (pendingEventsToSet !== null){
 _setLoginBtnText = (text) => widget.setLoginButtonText(text);
 auth.refresh();
 
-async function requireLogin(){
+async function requireLogin() {
   if (auth.isLoggedIn()) return true;
   toast("Для роботи потрібно залогінитись.", "warn", "🔐 Потрібен вхід");
   return false;
@@ -1466,15 +1466,15 @@ calendarEl?.addEventListener("mousedown", (e) => {
 });
 
 
-function isDateInActiveRange(date){
+function isDateInActiveRange(date) {
   const view = calendar?.view;
   if (!view) return true;
   const d = new Date(date);
   const from = new Date(view.activeStart);
-  const to   = new Date(view.activeEnd);
+  const to = new Date(view.activeEnd);
   return d.getTime() >= from.getTime() && d.getTime() < to.getTime();
 }
-function gotoDateIfOutOfRange(date){
+function gotoDateIfOutOfRange(date) {
   if (!date) return;
   if (isDateInActiveRange(date)) return;
   calendar.gotoDate(new Date(date));
@@ -1485,7 +1485,7 @@ function gotoDateIfOutOfRange(date){
 // - если дата вне активного диапазона, делаем gotoDate()
 // - и ЖДЁМ окончания загрузки диапазона (datesSet -> loadRangeAndRender -> setEventsSafe)
 // ========================================================
-async function gotoDateIfOutOfRangeAsync(date){
+async function gotoDateIfOutOfRangeAsync(date) {
   if (!date) return;
 
   if (isDateInActiveRange(date)) return;
@@ -1494,11 +1494,11 @@ async function gotoDateIfOutOfRangeAsync(date){
 
   // дождаться, пока onRangeChanged -> loadRangeAndRender отработает
   // (если сеть упала/abort — всё равно продолжаем, tmp мы хотим добавить)
-  try { await rangeLoadPromise; } catch {}
+  try { await rangeLoadPromise; } catch { }
 }
 
-async function reloadCalendarData(reason = ""){
-  if (!auth.isLoggedIn()){
+async function reloadCalendarData(reason = "") {
+  if (!auth.isLoggedIn()) {
     setEventsSafe([]);
     hideLoadError();
     return;
@@ -1524,7 +1524,7 @@ calendar.on("eventClick", async (info) => {
 
   if (ev.extendedProps?.__skd_marker) return;
 
-  if (isTempId(ev.id)){
+  if (isTempId(ev.id)) {
     openModal("create", {
       start: ev.start,
       end: ev.end,
@@ -1541,7 +1541,7 @@ calendar.on("eventClick", async (info) => {
 
   const del = ev.extendedProps?.__delete_error || "";
   const upd = ev.extendedProps?.__update_error || "";
-  if (del || upd){
+  if (del || upd) {
     openModal("edit", { event: ev, errorText: del || upd });
   }
 });
@@ -1549,7 +1549,7 @@ calendar.on("eventClick", async (info) => {
 // ========================================================
 // [20] CREATE (tmp -> API -> replace)
 // ========================================================
-async function createOrResubmitTempEvent(ev){
+async function createOrResubmitTempEvent(ev) {
   startSaving(ev.id, "create/submit tmp");
   clearCreateError(ev);
 
@@ -1576,23 +1576,23 @@ async function createOrResubmitTempEvent(ev){
     ev.remove();
 
 
-const createdId = String(snapshot.id);
-const existed = calendar.getEventById(createdId);
+    const createdId = String(snapshot.id);
+    const existed = calendar.getEventById(createdId);
 
-if (existed){
-  applyModelToEvent(existed, snapshot);
-  setEditActive(existed.id); // ✅ ВАЖЛИВО: повернути підсвітку на real
-  requestAnimationFrame(() => stopSaving(existed.id, "create done (already existed)"));
-  return existed.id;
-}
+    if (existed) {
+      applyModelToEvent(existed, snapshot);
+      setEditActive(existed.id); // ✅ ВАЖЛИВО: повернути підсвітку на real
+      requestAnimationFrame(() => stopSaving(existed.id, "create done (already existed)"));
+      return existed.id;
+    }
 
-const created = calendar.addEvent(modelToEventInput(snapshot));
-setEditActive(created.id);   // ✅ ВАЖЛИВО: підсвітити реальну подію
+    const created = calendar.addEvent(modelToEventInput(snapshot));
+    setEditActive(created.id);   // ✅ ВАЖЛИВО: підсвітити реальну подію
 
-requestAnimationFrame(() => stopSaving(created.id, "create done"));
-return created.id;
+    requestAnimationFrame(() => stopSaving(created.id, "create done"));
+    return created.id;
 
-  } catch(e){
+  } catch (e) {
     stopSaving(ev.id, "create failed");
     ev.setExtendedProp("__pending_create", false);
     applyCreateErrorText(ev, e);
@@ -1601,9 +1601,9 @@ return created.id;
   }
 }
 
-async function createJobFromModal(model){
+async function createJobFromModal(model) {
   const localId = "tmp-" + genGuid();
-  const m = { ...model, id: localId, errors: ensureErrorProps({}), __pending_create:true };
+  const m = { ...model, id: localId, errors: ensureErrorProps({}), __pending_create: true };
 
   const ev = calendar.addEvent({
     id: m.id,
@@ -1629,7 +1629,7 @@ async function createJobFromModal(model){
 // ========================================================
 // [21] UPDATE / DELETE
 // ========================================================
-async function safeUpdateEvent(event){
+async function safeUpdateEvent(event) {
   const id = event.id;
   startSaving(id, "update");
   clearUpdateError(event);
@@ -1641,7 +1641,7 @@ async function safeUpdateEvent(event){
 
     const res = await apiUpdateJob(payload);
 
-    if (res && (res.objCode || res.kzajCode)){
+    if (res && (res.objCode || res.kzajCode)) {
       m.objCode = String(res.objCode || m.objCode || "");
       m.kzajCode = String(res.kzajCode || m.kzajCode || "");
       applyModelToEvent(event, m);
@@ -1651,7 +1651,7 @@ async function safeUpdateEvent(event){
     log("UPDATE OK (API)", id, payload);
     return res;
 
-  } catch(e){
+  } catch (e) {
     applyUpdateErrorText(event, e);
     err("UPDATE failed:", e);
     return {};
@@ -1660,7 +1660,7 @@ async function safeUpdateEvent(event){
   }
 }
 
-async function safeDeleteEvent(event){
+async function safeDeleteEvent(event) {
   const id = event.id;
   startSaving(id, "delete");
   clearDeleteError(event);
@@ -1670,7 +1670,7 @@ async function safeDeleteEvent(event){
     event.remove();
     clearDeleteErrorText(event);
     log("DELETE OK (API)", id);
-  } catch(e){
+  } catch (e) {
     applyDeleteErrorText(event, e);
     err("DELETE failed:", e);
     throw e;
@@ -1688,14 +1688,14 @@ mSave.onclick = async () => {
   const description = mDescription.value.trim();
 
   const kpldVal = Number(mKpld.value || 0) || 0;
-  if (!kpldVal){
+  if (!kpldVal) {
     toast("Оберіть код роботи (KPLD) зі списку.", "warn", "Перевірка даних");
     mKpldText?.focus();
     return;
   }
 
   const parsed = getStartEndFromModal();
-  if (!parsed.ok){
+  if (!parsed.ok) {
     toast(parsed.error, "warn", "Перевірка дати/часу");
     return;
   }
@@ -1714,10 +1714,10 @@ mSave.onclick = async () => {
     errors: ensureErrorProps({})
   };
 
-  if (modalMode === "create"){
+  if (modalMode === "create") {
     setLastPlaceWork(placeWorkVal);
 
-    if (pendingCreate?.existingTempEvent){
+    if (pendingCreate?.existingTempEvent) {
       const ev = pendingCreate.existingTempEvent;
       const m = modelFromEvent(ev);
 
@@ -1729,28 +1729,28 @@ mSave.onclick = async () => {
 
       applyModelToEvent(ev, m);
 
-closeModal();
-widget.unselect();
+      closeModal();
+      widget.unselect();
 
-// ✅ ВАЖНО: дождаться диапазона, иначе setEventsSafe может снести tmp
-await gotoDateIfOutOfRangeAsync(m.start);
+      // ✅ ВАЖНО: дождаться диапазона, иначе setEventsSafe может снести tmp
+      await gotoDateIfOutOfRangeAsync(m.start);
 
-const newId = await createOrResubmitTempEvent(ev);
-return;
+      const newId = await createOrResubmitTempEvent(ev);
+      return;
 
     }
 
-closeModal();
-widget.unselect();
+    closeModal();
+    widget.unselect();
 
-// ✅ ВАЖНО: дождаться, пока календарь загрузит новый диапазон
-await gotoDateIfOutOfRangeAsync(modalModel.start);
+    // ✅ ВАЖНО: дождаться, пока календарь загрузит новый диапазон
+    await gotoDateIfOutOfRangeAsync(modalModel.start);
 
-const newId = await createJobFromModal(modalModel);
-return;
+    const newId = await createJobFromModal(modalModel);
+    return;
   }
 
-  if (modalMode === "edit" && currentEvent){
+  if (modalMode === "edit" && currentEvent) {
     setModalError("");
 
     const ev = currentEvent;
@@ -1777,7 +1777,7 @@ mDelete.onclick = async () => {
   const ok = await confirmDelete();
   if (!ok) return;
 
-  if (isTempId(currentEvent.id)){
+  if (isTempId(currentEvent.id)) {
     const ev = currentEvent;
     closeModal();
     ev.remove();
