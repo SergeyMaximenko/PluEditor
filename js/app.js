@@ -1258,6 +1258,15 @@ auth = ERPAuth.init({
 let widgetRef = null;
 let pendingEventsToSet = null;
 
+
+// ========================================================
+// [16.1] Range load "barrier" - promise текущей загрузки диапазона
+// Нужно, чтобы после calendar.gotoDate() можно было ДОЖДАТЬСЯ,
+// когда datesSet -> loadRangeAndRender() закончит setEventsSafe().
+// Иначе tmp-событие добавится, а потом будет "сметено" setEventsSafe().
+// ========================================================
+let rangeLoadPromise = Promise.resolve();
+
 function setEventsSafe(events){
   if (widgetRef) widgetRef.setEvents(events);
   else pendingEventsToSet = events;
@@ -1316,10 +1325,11 @@ async function loadRangeAndRender({ from, to, reason = "" }){
 const widget = new ERPDayCalendar("#calendar", {
   ctx: { el: ctx, hintEl: ctxHint, btnCreate: ctxCreate, btnClear: ctxClear },
 
-  onRangeChanged: async ({ from, to }) => {
-    await loadRangeAndRender({ from, to, reason: "datesSet" });
-  },
-
+onRangeChanged: ({ from, to }) => {
+  // ВАЖНО: сохраняем promise, чтобы другие места могли "await rangeLoadPromise"
+  rangeLoadPromise = loadRangeAndRender({ from, to, reason: "datesSet" });
+  return rangeLoadPromise;
+},
   onRefreshClick: async () => {
     if (!auth.isLoggedIn()){
       toast("Для оновлення потрібно залогінитись.", "warn", "🔐 Потрібен вхід");
@@ -1468,6 +1478,23 @@ function gotoDateIfOutOfRange(date){
   if (!date) return;
   if (isDateInActiveRange(date)) return;
   calendar.gotoDate(new Date(date));
+}
+
+// ========================================================
+// gotoDateIfOutOfRangeAsync
+// - если дата вне активного диапазона, делаем gotoDate()
+// - и ЖДЁМ окончания загрузки диапазона (datesSet -> loadRangeAndRender -> setEventsSafe)
+// ========================================================
+async function gotoDateIfOutOfRangeAsync(date){
+  if (!date) return;
+
+  if (isDateInActiveRange(date)) return;
+
+  calendar.gotoDate(new Date(date));
+
+  // дождаться, пока onRangeChanged -> loadRangeAndRender отработает
+  // (если сеть упала/abort — всё равно продолжаем, tmp мы хотим добавить)
+  try { await rangeLoadPromise; } catch {}
 }
 
 async function reloadCalendarData(reason = ""){
@@ -1702,24 +1729,25 @@ mSave.onclick = async () => {
 
       applyModelToEvent(ev, m);
 
-      closeModal();
-      widget.unselect();
+closeModal();
+widget.unselect();
 
-      gotoDateIfOutOfRange(m.start);
+// ✅ ВАЖНО: дождаться диапазона, иначе setEventsSafe может снести tmp
+await gotoDateIfOutOfRangeAsync(m.start);
 
-      const newId = await createOrResubmitTempEvent(ev);
-      //if (newId) setEditActive(newId);
-      return;
+const newId = await createOrResubmitTempEvent(ev);
+return;
+
     }
 
-    closeModal();
-    widget.unselect();
+closeModal();
+widget.unselect();
 
-    gotoDateIfOutOfRange(modalModel.start);
+// ✅ ВАЖНО: дождаться, пока календарь загрузит новый диапазон
+await gotoDateIfOutOfRangeAsync(modalModel.start);
 
-    const newId = await createJobFromModal(modalModel);
-    //if (newId) setEditActive(newId);
-    return;
+const newId = await createJobFromModal(modalModel);
+return;
   }
 
   if (modalMode === "edit" && currentEvent){
