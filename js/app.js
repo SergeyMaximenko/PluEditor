@@ -125,6 +125,83 @@ function toast(message, type = "error", title = "Повідомлення", ms =
 // PlaceWork: persist last choice
 // ========================================================
 const LS_PLACEWORK_KEY = "erp_cal_last_placeWork_v1";
+
+
+// ========================================================
+// Recent entries (KPLD + Description) in localStorage
+// - сохраняем ПЕРЕД API (create/update из модалки)
+// - max N записей
+// - dedupe по (kpld + description)
+// ========================================================
+const LS_RECENT_KEY = "erp_cal_recent_entries_v1";
+const RECENT_LIMIT = 30; // ✅ параметр (можешь менять)
+
+function normSpaces(s){
+  return String(s ?? "").replace(/\s+/g, " ").trim();
+}
+
+function loadRecent(){
+  try{
+    const raw = localStorage.getItem(LS_RECENT_KEY);
+    if (!raw) return [];
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr)) return [];
+    return arr
+      .filter(x => x && typeof x === "object")
+      .map(x => ({
+        kpld: String(x.kpld ?? "").trim(),
+        description: String(x.description ?? "")
+      }))
+      .filter(x => x.kpld || normSpaces(x.description));
+  }catch{
+    return [];
+  }
+}
+
+function saveRecent(arr){
+  try{
+    localStorage.setItem(LS_RECENT_KEY, JSON.stringify(arr || []));
+  }catch{}
+}
+
+/**
+ * Добавить запись в конец списка (как "самая свежая")
+ * - если уже есть такая же (kpld+description) -> удаляем старую
+ * - ограничиваем размер RECENT_LIMIT (старые удаляем с начала)
+ */
+function pushRecentEntry({ kpld, description }){
+  const k = String(kpld ?? "").trim();
+  const d = String(description ?? "");
+
+  if (!k && !normSpaces(d)) return;
+
+  const keyK = k;
+  const keyD = normSpaces(d);
+
+  let arr = loadRecent();
+
+  // удалить дубликаты
+  arr = arr.filter(x =>
+    !(String(x.kpld ?? "").trim() === keyK && normSpaces(x.description ?? "") === keyD)
+  );
+
+  // добавить как самый свежий (в конец)
+  arr.push({ kpld: keyK, description: d });
+
+  // ограничить размер
+  while (arr.length > RECENT_LIMIT) arr.shift();
+
+  saveRecent(arr);
+}
+
+function getLastRecentEntry(){
+  const arr = loadRecent();
+  return arr.length ? arr[arr.length - 1] : null;
+}
+
+
+
+
 function getLastPlaceWork() {
   try {
     const v = localStorage.getItem(LS_PLACEWORK_KEY);
@@ -186,7 +263,7 @@ const mKpld = document.getElementById("mKpld");
 
 const mSave = document.getElementById("mSave");
 const mCancel = document.getElementById("mCancel");
-const mDelete = document.getElementById("mDelete");
+
 const mPlaceWork = document.getElementById("mPlaceWork");
 const mError = document.getElementById("mError");
 
@@ -255,6 +332,51 @@ function hideLoadError() {
 // [5] Outlook paste
 // ========================================================
 const mPasteMail = document.getElementById("mPasteMail");
+
+
+// ========================================================
+// [5.1] Paste LAST entry (recent) button 🕘
+// ========================================================
+const mPasteLast = document.getElementById("mPasteLast");
+
+mPasteLast?.addEventListener("click", async () => {
+  try{
+    setModalError?.("");
+
+    const last = getLastRecentEntry();
+    if (!last){
+      toast("Ще немає збережених записів.", "warn", "🕘 Останній запис");
+      return;
+    }
+
+    // 1) Description
+    if (last.description != null) mDescription.value = String(last.description);
+
+    // 2) KPLD + подтянуть label через pldPrefillByKpld()
+    const k = String(last.kpld ?? "").trim();
+    if (k){
+      mKpld.value = k;
+      await pldPrefillByKpld(k);
+    } else {
+      mKpld.value = "";
+      mKpldText.value = "";
+    }
+
+    // обновить UI
+    try { window.updateKpldClearVisibility?.(); } catch {}
+
+    
+    // ✅ важно: НЕ фокусируем mKpldText, иначе откроется список
+    pldHideList();                   // на всякий случай закрыть список, если был открыт
+    mSave?.focus();                  // ✅ фокус на "Додати/Зберегти"
+
+  } catch(e){
+    err("PasteLast failed:", e);
+    toast("Помилка підстановки останнього запису", "error", "🕘 Останній запис");
+  }
+});
+
+
 initOutlookClipboardPaste({
   btn: mPasteMail,
   mDate, mFrom, mTo, mDescription, mKpldText,
@@ -269,6 +391,19 @@ document.addEventListener("keydown", (e) => {
     }
   }
 });
+
+document.addEventListener("keydown", async (e) => {
+  // чтобы не срабатывало при наборе текста в input/textarea
+  const tag = (e.target?.tagName || "").toLowerCase();
+  const typing = (tag === "input" || tag === "textarea" || e.target?.isContentEditable);
+
+  if (!typing && e.key === "Delete") {
+    e.preventDefault();
+    await deleteCurrentSelectedEvent();
+  }
+});
+
+
 
 // ========================================================
 // [6] Spinners: LOAD (soft) vs AUTH (modal)
@@ -1078,6 +1213,8 @@ function jobToEvent(job) { return modelToEventInput(modelFromJob(job)); }
 let modalMode = null;   // 'create' | 'edit'
 let currentEvent = null;
 let pendingCreate = null;
+let modalOriginal = null; // { kpld: "123", description: "..." } only for edit
+
 
 function fillModalWhen(start, end) {
   mWhen.textContent = formatWhenWithDuration(start, end);
@@ -1102,9 +1239,15 @@ function openModal(mode, payload) {
     mKpld.value = kpldVal ? String(kpldVal) : "";
     pldPrefillByKpld(mKpld.value);
 
+    modalOriginal = {
+  kpld: String(mKpld.value || "").trim(),
+  description: String(mDescription.value || "")
+};
+
+
     modalTitle.textContent = "Коригувати запис";
     mSave.textContent = "✏️ Коригувати";
-    mDelete.style.display = "inline-block";
+    
 
     const upd = currentEvent.extendedProps?.__update_error || "";
     const del = currentEvent.extendedProps?.__delete_error || "";
@@ -1116,6 +1259,8 @@ function openModal(mode, payload) {
     }
 
     setModalError(text ? ("⚠️ " + text) : "");
+
+
   } else {
     if (mPlaceWork) {
       const fromPayload = String(payload?.placeWork || "").trim();
@@ -1136,10 +1281,15 @@ function openModal(mode, payload) {
 
     modalTitle.textContent = "Додати запис";
     mSave.textContent = "Додати";
-    mDelete.style.display = "none";
+    
 
     setModalError(payload?.errorText ? ("⚠️ " + payload.errorText) : "");
+
+    modalOriginal = null;
+
   }
+
+
 
   backdrop.style.display = "flex";
   backdrop.setAttribute("aria-hidden", "false");
@@ -1531,6 +1681,7 @@ calendar.on("eventClick", async (info) => {
       title: ev.title || "",
       kpld: ev.extendedProps?.kpld || 0,
       placeWork: ev.extendedProps?.placeWork || "",
+      description: ev.extendedProps?.description || "",   // ✅ ДОБАВИТЬ
       errorText: ev.extendedProps?.__create_error || ""
     });
     currentEvent = ev;
@@ -1714,6 +1865,22 @@ mSave.onclick = async () => {
     errors: ensureErrorProps({})
   };
 
+  // ========================================================
+// RECENT: сохраняем ПЕРЕД API
+// - create: всегда
+// - edit: только если изменился kpld или description
+// - resize/drag сюда не попадает (там safeUpdateEvent напрямую)
+// ========================================================
+// RECENT: любое сохранение через модалку -> это "последняя запись"
+const nowK = String(modalModel.kpld || "").trim();
+const nowD = String(modalModel.description || "");
+
+if (modalMode === "create" || modalMode === "edit") {
+  pushRecentEntry({ kpld: nowK, description: nowD });
+}
+
+
+
   if (modalMode === "create") {
     setLastPlaceWork(placeWorkVal);
 
@@ -1771,22 +1938,42 @@ mSave.onclick = async () => {
   }
 };
 
-mDelete.onclick = async () => {
-  if (!currentEvent) return;
 
+// ========================================================
+// Unified delete (modal + external hotkeys/context)
+// ========================================================
+
+
+async function deleteCurrentSelectedEvent(){
+  if (!await requireLogin()) return;
+
+  // 1) Берём текущую "active" запись (ту, что подсвечена)
+  const ev = editActiveEventId ? calendar.getEventById(editActiveEventId) : null;
+  if (!ev) return;
+
+  // SKD маркеры не удаляем
+  if (ev.extendedProps?.__skd_marker) return;
+
+  // 2) Подтверждение (то же самое, что было в модалке)
   const ok = await confirmDelete();
   if (!ok) return;
 
-  if (isTempId(currentEvent.id)) {
-    const ev = currentEvent;
-    closeModal();
+  // 3) Если открыта модалка — закрываем, чтобы UI не завис
+  if (backdrop?.style.display === "flex") closeModal();
+
+  // 4) Удаление
+  if (isTempId(ev.id)) {
     ev.remove();
+    clearEditActive();
     return;
   }
 
-  const ev = currentEvent;
-  closeModal();
+  try {
+    await safeDeleteEvent(ev);
+    clearEditActive();
+  } catch {
+    // safeDeleteEvent уже повесит error-mark на событие
+  }
+}
 
-  try { await safeDeleteEvent(ev); }
-  catch { /* оставили на ивенте ошибку */ }
-};
+
