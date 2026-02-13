@@ -123,7 +123,7 @@ export const ERPAuth = (() => {
       if (!login || !pass) return { success:false, message:"Логін/пароль обовʼязкові" };
 
       const ac = new AbortController();
-      const timer = setTimeout(() => ac.abort(), 15000);
+      const timer = setTimeout(() => ac.abort(), 10000);
 
       try{
         const url = `${apiBase}/ws/api/LOGIN`;
@@ -158,7 +158,7 @@ export const ERPAuth = (() => {
       }catch(e){
         let messageError = "";
         if (e?.name === "AbortError"){
-          messageError = "Таймаут авторизації 15 сек\nПеревірте, що ви у внутрішній мережі IT-Enterprise";
+          messageError = "Таймаут авторизації 10 сек\nПеревірте, що ви у внутрішній мережі IT-Enterprise";
         } else if (e?.message === "Failed to fetch"){
           messageError = "Не вдалось отримати доступ до серверу ITA\nПеревірте, що ви у внутрішній мережі IT-Enterprise";
         } else {
@@ -200,7 +200,7 @@ export const ERPAuth = (() => {
         try{
           setLoginError(dom, "");
 
-          
+
           const login = s(dom.user?.value).trim();
           const pass  = s(dom.pass?.value).trim();
 

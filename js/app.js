@@ -11,6 +11,8 @@ import { initOutlookClipboardPaste } from "./outlook.paste.bundle.js";
 import { ERPAuth } from "./erp.auth.bundle.js";
 import { uiConfirm } from "./ui.modal.bundle.js";
 
+window.__skipNextRangeLoad = false;
+
 // ========================================================
 // [1] LOG
 // ========================================================
@@ -136,12 +138,12 @@ const LS_PLACEWORK_KEY = "erp_cal_last_placeWork_v1";
 const LS_RECENT_KEY = "erp_cal_recent_entries_v1";
 const RECENT_LIMIT = 30; // ✅ параметр (можешь менять)
 
-function normSpaces(s){
+function normSpaces(s) {
   return String(s ?? "").replace(/\s+/g, " ").trim();
 }
 
-function loadRecent(){
-  try{
+function loadRecent() {
+  try {
     const raw = localStorage.getItem(LS_RECENT_KEY);
     if (!raw) return [];
     const arr = JSON.parse(raw);
@@ -153,15 +155,15 @@ function loadRecent(){
         description: String(x.description ?? "")
       }))
       .filter(x => x.kpld || normSpaces(x.description));
-  }catch{
+  } catch {
     return [];
   }
 }
 
-function saveRecent(arr){
-  try{
+function saveRecent(arr) {
+  try {
     localStorage.setItem(LS_RECENT_KEY, JSON.stringify(arr || []));
-  }catch{}
+  } catch { }
 }
 
 /**
@@ -169,7 +171,7 @@ function saveRecent(arr){
  * - если уже есть такая же (kpld+description) -> удаляем старую
  * - ограничиваем размер RECENT_LIMIT (старые удаляем с начала)
  */
-function pushRecentEntry({ kpld, description }){
+function pushRecentEntry({ kpld, description }) {
   const k = String(kpld ?? "").trim();
   const d = String(description ?? "");
 
@@ -194,7 +196,7 @@ function pushRecentEntry({ kpld, description }){
   saveRecent(arr);
 }
 
-function getLastRecentEntry(){
+function getLastRecentEntry() {
   const arr = loadRecent();
   return arr.length ? arr[arr.length - 1] : null;
 }
@@ -340,11 +342,11 @@ const mPasteMail = document.getElementById("mPasteMail");
 const mPasteLast = document.getElementById("mPasteLast");
 
 mPasteLast?.addEventListener("click", async () => {
-  try{
+  try {
     setModalError?.("");
 
     const last = getLastRecentEntry();
-    if (!last){
+    if (!last) {
       toast("Ще немає збережених записів.", "warn", "🕘 Останній запис");
       return;
     }
@@ -354,7 +356,7 @@ mPasteLast?.addEventListener("click", async () => {
 
     // 2) KPLD + подтянуть label через pldPrefillByKpld()
     const k = String(last.kpld ?? "").trim();
-    if (k){
+    if (k) {
       mKpld.value = k;
       await pldPrefillByKpld(k);
     } else {
@@ -363,14 +365,14 @@ mPasteLast?.addEventListener("click", async () => {
     }
 
     // обновить UI
-    try { window.updateKpldClearVisibility?.(); } catch {}
+    try { window.updateKpldClearVisibility?.(); } catch { }
 
-    
+
     // ✅ важно: НЕ фокусируем mKpldText, иначе откроется список
     pldHideList();                   // на всякий случай закрыть список, если был открыт
     mSave?.focus();                  // ✅ фокус на "Додати/Зберегти"
 
-  } catch(e){
+  } catch (e) {
     err("PasteLast failed:", e);
     toast("Помилка підстановки останнього запису", "error", "🕘 Останній запис");
   }
@@ -1240,14 +1242,14 @@ function openModal(mode, payload) {
     pldPrefillByKpld(mKpld.value);
 
     modalOriginal = {
-  kpld: String(mKpld.value || "").trim(),
-  description: String(mDescription.value || "")
-};
+      kpld: String(mKpld.value || "").trim(),
+      description: String(mDescription.value || "")
+    };
 
 
     modalTitle.textContent = "Коригувати запис";
     mSave.textContent = "✏️ Коригувати";
-    
+
 
     const upd = currentEvent.extendedProps?.__update_error || "";
     const del = currentEvent.extendedProps?.__delete_error || "";
@@ -1281,7 +1283,7 @@ function openModal(mode, payload) {
 
     modalTitle.textContent = "Додати запис";
     mSave.textContent = "Додати";
-    
+
 
     setModalError(payload?.errorText ? ("⚠️ " + payload.errorText) : "");
 
@@ -1427,15 +1429,6 @@ function setEventsSafe(events) {
 // ========================================================
 
 
-function buildNetworkMessage(e) {
-  if (e?.name === "AbortError") {
-    return "Таймаут 15 сек: сервер довго відповідає (PLU\\SKD не завантажено)\nПеревірте, що ви знаходитесь у внутрішній мережі IT-Enterprise";
-  }
-  if (e?.message === "Failed to fetch") {
-    return "Не вдалось отримати доступ до серверу ITA\nПеревірте, що ви знаходитесь у внутрішній мережі IT-Enterprise";
-  }
-  return "Не вдалось отримати доступ до серверу ITA\nПеревірте, що ви знаходитесь у внутрішній мережі IT-Enterprise\nПомилка: " + (e?.message || e);
-}
 
 async function fetchEventsForRange(from, to, signal) {
   const [jobs, skd] = await Promise.all([
@@ -1448,7 +1441,7 @@ async function fetchEventsForRange(from, to, signal) {
 async function loadRangeAndRender({ from, to, reason = "" }) {
   showLoadSpinner(reason || "load", "Завантаження…");
   const ac = new AbortController();
-  const timer = setTimeout(() => ac.abort(), 15000);
+  const timer = setTimeout(() => ac.abort(), 10000);
 
   try {
     if (!auth.isLoggedIn()) {
@@ -1462,7 +1455,19 @@ async function loadRangeAndRender({ from, to, reason = "" }) {
     hideLoadError();
   } catch (e) {
     err("LOAD failed:", e);
-    showLoadError(buildNetworkMessage(e));
+    let messageError = "";
+    if (e?.name === "AbortError") {
+      messageError = "Таймаут 10 сек: сервер довго відповідає (PLU\\SKD не завантажено)\nПеревірте, що ви знаходитесь у внутрішній мережі IT-Enterprise";
+    }
+    if (e?.message === "Failed to fetch") {
+      messageError = "Не вдалось отримати доступ до серверу ITA\nПеревірте, що ви знаходитесь у внутрішній мережі IT-Enterprise";
+    }
+    else {
+      messageError = "Не вдалось отримати доступ до серверу ITA\nПеревірте, що ви знаходитесь у внутрішній мережі IT-Enterprise\nПомилка: " + (e?.message || e);
+
+    }
+
+    showLoadError(messageError);
   } finally {
     clearTimeout(timer);
     hideLoadSpinner(reason || "load");
@@ -1499,7 +1504,7 @@ const widget = new ERPDayCalendar("#calendar", {
 
   onEditRequested: async ({ event }) => {
 
-   
+
 
 
     if (event.extendedProps?.__skd_marker) return;
@@ -1609,17 +1614,19 @@ const calendar = widget.getCalendar();
 const LS_GRID_ZOOM_KEY = "erp_cal_grid_zoom_v2";
 
 // применить zoom к CSS-переменной
-function applyRowZoomCss(zoomInt){
+function applyRowZoomCss(zoomInt) {
   const z = Number.isFinite(zoomInt) ? Math.trunc(zoomInt) : 0;
   document.documentElement.style.setProperty("--fcRowZoom", String(z));
-  try { localStorage.setItem(LS_GRID_ZOOM_KEY, String(z)); } catch {}
+  try { localStorage.setItem(LS_GRID_ZOOM_KEY, String(z)); } catch { }
   return z;
 }
 
+
+
 // жёсткий пересчёт геометрии FC после смены высот строк
-function recalcCalendarGridHard(){
+function recalcCalendarGridHard() {
   // updateSize — обязательный
-  try { calendar.updateSize(); } catch {}
+  try { calendar.updateSize(); } catch { }
 
   // часто нужно “пересобрать” view, иначе оси/события могут остаться в старой геометрии
   const viewType = calendar.view?.type || "timeGridDay";
@@ -1632,9 +1639,17 @@ function recalcCalendarGridHard(){
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
       // трюк: сменить view на тот же самый -> FC пересчитает slats/coords
-      try { calendar.changeView(viewType); } catch {}
+      try {
+        // Чтобы не вызывать считку данных
+        window.__skipNextRangeLoad = true;
+          calendar.changeView(viewType);
+        window.__skipNextRangeLoad = false;
+        
+
+      }
+      catch { }
       requestAnimationFrame(() => {
-        try { calendar.updateSize(); } catch {}
+        try { calendar.updateSize(); } catch { }
         if (scroller) scroller.scrollTop = top;
         window.dispatchEvent(new Event("resize"));
       });
@@ -1642,24 +1657,24 @@ function recalcCalendarGridHard(){
   });
 }
 
-function fmtZoomBadge(z){
+function fmtZoomBadge(z) {
   const n = Number(z) || 0;
   return (n > 0) ? `+${n}` : String(n);
 }
 
-function syncZoomLabel(){
+function syncZoomLabel() {
   const btn = document.querySelector("#calendar .fc-erpZoomLabel-button");
   if (!btn) return;
 
   let cur = 0;
-  try { cur = parseInt(localStorage.getItem(LS_GRID_ZOOM_KEY) || "0", 10) || 0; } catch {}
+  try { cur = parseInt(localStorage.getItem(LS_GRID_ZOOM_KEY) || "0", 10) || 0; } catch { }
 
   btn.innerHTML = `<span class="zoom-badge">${fmtZoomBadge(cur)}</span>`;
   btn.title = `Масштаб сітки: ${fmtZoomBadge(cur)} (клік = скинути в 0)`;
 }
 
 // чуть отложенная синхронизация — потому что changeView()/render могут пересоздать тулбар
-function syncZoomLabelSoon(){
+function syncZoomLabelSoon() {
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
       syncZoomLabel();
@@ -1669,7 +1684,7 @@ function syncZoomLabelSoon(){
 
 
 
-window.setGridZoom = function setGridZoom(value){
+window.setGridZoom = function setGridZoom(value) {
   const z = applyRowZoomCss(value);
   recalcCalendarGridHard();
   syncZoomLabelSoon(); // ✅ обновить "+2 / -1 / 0"
@@ -1678,16 +1693,16 @@ window.setGridZoom = function setGridZoom(value){
 };
 
 
-window.bumpGridZoom = function bumpGridZoom(delta){
+window.bumpGridZoom = function bumpGridZoom(delta) {
   let cur = 0;
-  try { cur = parseInt(localStorage.getItem(LS_GRID_ZOOM_KEY) || "0", 10) || 0; } catch {}
+  try { cur = parseInt(localStorage.getItem(LS_GRID_ZOOM_KEY) || "0", 10) || 0; } catch { }
   return window.setGridZoom(cur + (Number(delta) || 0));
 };
 
 // init from LS
-(function initRowZoom(){
+(function initRowZoom() {
   let z = 0;
-  try { z = parseInt(localStorage.getItem(LS_GRID_ZOOM_KEY) || "0", 10) || 0; } catch {}
+  try { z = parseInt(localStorage.getItem(LS_GRID_ZOOM_KEY) || "0", 10) || 0; } catch { }
   applyRowZoomCss(z);
   recalcCalendarGridHard();
   syncZoomLabelSoon(); // ✅ показать значение при старте
@@ -1965,18 +1980,18 @@ mSave.onclick = async () => {
   };
 
   // ========================================================
-// RECENT: сохраняем ПЕРЕД API
-// - create: всегда
-// - edit: только если изменился kpld или description
-// - resize/drag сюда не попадает (там safeUpdateEvent напрямую)
-// ========================================================
-// RECENT: любое сохранение через модалку -> это "последняя запись"
-const nowK = String(modalModel.kpld || "").trim();
-const nowD = String(modalModel.description || "");
+  // RECENT: сохраняем ПЕРЕД API
+  // - create: всегда
+  // - edit: только если изменился kpld или description
+  // - resize/drag сюда не попадает (там safeUpdateEvent напрямую)
+  // ========================================================
+  // RECENT: любое сохранение через модалку -> это "последняя запись"
+  const nowK = String(modalModel.kpld || "").trim();
+  const nowD = String(modalModel.description || "");
 
-if (modalMode === "create" || modalMode === "edit") {
-  pushRecentEntry({ kpld: nowK, description: nowD });
-}
+  if (modalMode === "create" || modalMode === "edit") {
+    pushRecentEntry({ kpld: nowK, description: nowD });
+  }
 
 
 
@@ -2030,7 +2045,7 @@ if (modalMode === "create" || modalMode === "edit") {
 
     applyModelToEvent(ev, m);
 
-    
+
     closeModal();
     gotoDateIfOutOfRange(m.start);
 
@@ -2044,7 +2059,7 @@ if (modalMode === "create" || modalMode === "edit") {
 // ========================================================
 
 
-async function deleteCurrentSelectedEvent(){
+async function deleteCurrentSelectedEvent() {
   if (!await requireLogin()) return;
 
   // 1) Берём текущую "active" запись (ту, что подсвечена)

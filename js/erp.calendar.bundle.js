@@ -361,6 +361,12 @@ erpZoomIn: {
         this._syncRefreshButtonDom();
         this._syncLoginButtonDom();
         
+         // ✅ если это внутренний reflow от zoom — пропускаем только загрузку диапазона
+        if (window.__skipNextRangeLoad) {
+          window.__skipNextRangeLoad = false;
+          return;
+        }
+        
         const { from, to } = viewToRange(arg.view);
         if (this.hooks.onRangeChanged) {
           await this.hooks.onRangeChanged({ from, to, view: arg.view, calendar: this.calendar });
