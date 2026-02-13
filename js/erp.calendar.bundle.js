@@ -36,8 +36,8 @@ const CALENDAR_CSS = `
   pointer-events: none;
 }
 .fc .fc-timegrid-event .fc-event-main{ padding-left: 6px; }
-.fc .fc-event-time{ font-weight: 700; font-size: 11px; color: rgba(0,0,0,.78) !important; }
-.fc .fc-event-title{ font-weight: 700; font-size: 12px; line-height: 1.2; color: rgba(0,0,0,.92) !important; }
+.fc .fc-event-time{ font-weight: 700; font-size: 11px; color: rgba(0,0,0,1) !important; }
+.fc .fc-event-title{ font-weight: 400; font-size: 12px; line-height: 1.2; color: rgba(0,0,0,1) !important; }
 
 /* grid */
 .fc .fc-timegrid-slot{ border-top: 1px solid var(--grid-minor); }
@@ -112,7 +112,7 @@ const CALENDAR_CSS = `
 }
 .fc .fc-timegrid-event.fc-event-mirror .fc-event-time,
 .fc .fc-timegrid-event.fc-mirror .fc-event-time{
-  font-weight: 800 !important;
+  font-weight: 700 !important;
   color: rgba(0,0,0,.85) !important;
 }
 
@@ -176,11 +176,11 @@ const CALENDAR_CSS = `
 /* ===== Colored codes inside event title ===== */
 .fc .ev-obj-code{
   color: #0000ff;
-  font-weight: 800;
+  font-weight: 700;
 }
 .fc .ev-kzaj-code{
-  color: #00a300;
-  font-weight: 800;
+  color: #009E3A;
+  font-weight: 700;
 }
 .fc .ev-obj-code:empty,
 .fc .ev-kzaj-code:empty{
@@ -194,7 +194,61 @@ const CALENDAR_CSS = `
 }
 
 
+/* ===== COMPACT TIMEGRID HEIGHT ===== */
 
+
+/* ===== COMPACT TIMEGRID HEIGHT (zoomable) ===== */
+/* ===== ZOOMABLE ROW HEIGHT (works) ===== */
+:root{
+  --fcRowHBase: 20px;     /* zoom 0 */
+  --fcRowZoomStep: 2px;   /* шаг: +1 = +3px (подбери) */
+  --fcRowZoom: 0;         /* целое значение */
+  --fcRowH: calc(var(--fcRowHBase) + (var(--fcRowZoom) * var(--fcRowZoomStep)));
+}
+
+/* ✅ ключевое: именно TR задаёт реальную геометрию слотов */
+.fc .fc-timegrid-slots tr{
+  height: var(--fcRowH) !important;
+}
+
+/* (не обязательно, но часто помогает чтобы внутри не было “своей” высоты) */
+.fc .fc-timegrid-slot,
+.fc .fc-timegrid-slot-lane{
+  height: 100% !important;
+}
+
+
+
+
+
+
+
+
+
+/* 1. Прибираємо псевдо-рядок, який розпирає table */
+/*
+.fc .fc-timegrid-slot:empty::before,
+.fc .fc-timegrid-slot-lane:empty::before{
+  _content: none !important;
+  _display: none !important;
+}
+
+/* 2. Фіксуємо висоту рядка таблиці */
+.fc .fc-timegrid-slots tr{
+  _height: 5px !important;   /* <-- міняй це число */
+}
+
+/* 3. Прибираємо внутрішній line-height */
+.fc .fc-timegrid-slot,
+.fc .fc-timegrid-slot-lane{
+  _height: 5px !important;
+  _padding: 0 !important;
+  _line-height: 0 !important;
+}
+
+.fc .fc-timegrid-slots td{
+  line-height: 0 !important;
+}
 
 `;
 
@@ -265,13 +319,27 @@ export class ERPDayCalendar {
       firstDay: 1,
       locale: "uk",
 
-      headerToolbar: {
-        left: "erpRefresh,prev,next today,timeGridDay,timeGridWeek",
-        center: "title",
-        right: "erpLogin"
-      },
+headerToolbar: {
+  left: "erpRefresh,prev,next today,timeGridDay,timeGridWeek",
+  center: "title",
+  right: "erpZoomOut,erpZoomLabel,erpZoomIn erpLogin"
+},
 
       customButtons: {
+        erpZoomOut: {
+  text: "−",
+  click: () => { try { window.bumpGridZoom?.(-1); } catch {} }
+},
+erpZoomLabel: {
+  text: "",
+  click: () => { try { window.setGridZoom?.(0); } catch {} }
+},
+erpZoomIn: {
+  text: "+",
+  click: () => { try { window.bumpGridZoom?.(+1); } catch {} }
+},
+
+
         erpRefresh: {
           text: "↻ Оновити",
           click: () => { this.hooks.onRefreshClick?.({ calendar: this.calendar }); }
@@ -280,16 +348,19 @@ export class ERPDayCalendar {
           text: "",
           click: () => { this.hooks.onLoginClick?.({ calendar: this.calendar }); }
         }
+        
       },
 
       viewDidMount: () => {
         this._syncRefreshButtonDom();
         this._syncLoginButtonDom();
+        
       },
 
       datesSet: async (arg) => {
         this._syncRefreshButtonDom();
         this._syncLoginButtonDom();
+        
         const { from, to } = viewToRange(arg.view);
         if (this.hooks.onRangeChanged) {
           await this.hooks.onRangeChanged({ from, to, view: arg.view, calendar: this.calendar });

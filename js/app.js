@@ -1498,6 +1498,10 @@ const widget = new ERPDayCalendar("#calendar", {
   },
 
   onEditRequested: async ({ event }) => {
+
+   
+
+
     if (event.extendedProps?.__skd_marker) return;
     if (!await requireLogin()) return;
 
@@ -1600,6 +1604,101 @@ async function requireLogin() {
 }
 
 const calendar = widget.getCalendar();
+
+// ===== GRID ROW ZOOM (WORKING PATH) ===============================
+const LS_GRID_ZOOM_KEY = "erp_cal_grid_zoom_v2";
+
+// применить zoom к CSS-переменной
+function applyRowZoomCss(zoomInt){
+  const z = Number.isFinite(zoomInt) ? Math.trunc(zoomInt) : 0;
+  document.documentElement.style.setProperty("--fcRowZoom", String(z));
+  try { localStorage.setItem(LS_GRID_ZOOM_KEY, String(z)); } catch {}
+  return z;
+}
+
+// жёсткий пересчёт геометрии FC после смены высот строк
+function recalcCalendarGridHard(){
+  // updateSize — обязательный
+  try { calendar.updateSize(); } catch {}
+
+  // часто нужно “пересобрать” view, иначе оси/события могут остаться в старой геометрии
+  const viewType = calendar.view?.type || "timeGridDay";
+
+  // сохраняем вертикальный скролл, чтобы не прыгало
+  const scroller = document.querySelector("#calendar .fc-scroller");
+  const top = scroller ? scroller.scrollTop : 0;
+
+  // 2 кадра, чтобы браузер применил новый TR height
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      // трюк: сменить view на тот же самый -> FC пересчитает slats/coords
+      try { calendar.changeView(viewType); } catch {}
+      requestAnimationFrame(() => {
+        try { calendar.updateSize(); } catch {}
+        if (scroller) scroller.scrollTop = top;
+        window.dispatchEvent(new Event("resize"));
+      });
+    });
+  });
+}
+
+function fmtZoomBadge(z){
+  const n = Number(z) || 0;
+  return (n > 0) ? `+${n}` : String(n);
+}
+
+function syncZoomLabel(){
+  const btn = document.querySelector("#calendar .fc-erpZoomLabel-button");
+  if (!btn) return;
+
+  let cur = 0;
+  try { cur = parseInt(localStorage.getItem(LS_GRID_ZOOM_KEY) || "0", 10) || 0; } catch {}
+
+  btn.innerHTML = `<span class="zoom-badge">${fmtZoomBadge(cur)}</span>`;
+  btn.title = `Масштаб сітки: ${fmtZoomBadge(cur)} (клік = скинути в 0)`;
+}
+
+// чуть отложенная синхронизация — потому что changeView()/render могут пересоздать тулбар
+function syncZoomLabelSoon(){
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      syncZoomLabel();
+    });
+  });
+}
+
+
+
+window.setGridZoom = function setGridZoom(value){
+  const z = applyRowZoomCss(value);
+  recalcCalendarGridHard();
+  syncZoomLabelSoon(); // ✅ обновить "+2 / -1 / 0"
+  console.log("[GRID ZOOM] set =", z);
+  return z;
+};
+
+
+window.bumpGridZoom = function bumpGridZoom(delta){
+  let cur = 0;
+  try { cur = parseInt(localStorage.getItem(LS_GRID_ZOOM_KEY) || "0", 10) || 0; } catch {}
+  return window.setGridZoom(cur + (Number(delta) || 0));
+};
+
+// init from LS
+(function initRowZoom(){
+  let z = 0;
+  try { z = parseInt(localStorage.getItem(LS_GRID_ZOOM_KEY) || "0", 10) || 0; } catch {}
+  applyRowZoomCss(z);
+  recalcCalendarGridHard();
+  syncZoomLabelSoon(); // ✅ показать значение при старте
+})();
+
+
+
+
+
+
+
 
 // при selection — сбрасываем синее active
 //calendar.on("select", () => clearEditActive());
