@@ -1015,7 +1015,7 @@ function skdIntervalsToMarkerEvents(items) {
       display: "background",
       editable: false,
       classNames: ["skd-marker", "skd-to"],
-      extendedProps: { __skd_marker: true, __skd_label: `СКД по ${toTxt}`,  __skd_to_tag: tt ? `(${tt})` : "" }
+      extendedProps: { __skd_marker: true, __skd_label: `СКД по ${toTxt}`,  __skd_to_tag: tt ? `в офісі: ${tt}` : "" }
     });
   }
   return out;

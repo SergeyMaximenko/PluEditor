@@ -179,21 +179,28 @@ const CALENDAR_CSS = `
 .fc .fc-timegrid-bg-harness.skd-marker.skd-to::after{
   content: attr(data-skd-to-tag);
   position: absolute;
-  
+
   left: 50%;
   transform: translateX(-50%);
 
-  top: -34px;              /* трохи вище основного бейджа (який -18px) */
+  top: 6px;                /* під лінію */
+
   font-size: 11px;
   font-weight: 500;
   background: rgba(255,255,255,.85);
-  padding: 1px 6px;
+  padding: 2px 8px;        /* трохи ширше */
   border-radius: 10px;
   border: 1px solid rgba(0,0,0,.10);
   line-height: 1.2;
-  color: #a91495;          /* ✅ ОЦЕ — КОЛІР мітки */
+  color: #a91495;
   z-index: 9;
+
+  /* ✅ ГОЛОВНЕ: 1 рядок */
+  white-space: nowrap;
+  width: max-content;
+  max-width: none;
 }
+
 
 
 
