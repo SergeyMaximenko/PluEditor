@@ -139,23 +139,26 @@ const CALENDAR_CSS = `
   background: transparent !important;
   opacity: 1 !important;
 }
-.fc .fc-timegrid-bg-harness.skd-marker::after{
-  content:"";
-  position:absolute;
-  left:0; right:0; top:0;
-  border-top: 2px solid var(--skd-from);
-  z-index: 7;
-  pointer-events: none;
+/* ЛІНІЯ SKD — через background, щоб ::after був вільний */
+.fc .fc-timegrid-bg-harness.skd-marker{
+  background-repeat: no-repeat;
+  background-size: 100% 2px;
+  background-position: top left;
+  background-image: linear-gradient(to right, var(--skd-from), var(--skd-from));
 }
-.fc .fc-timegrid-bg-harness.skd-marker.skd-to::after{
-  border-top-color: var(--skd-to);
+.fc .fc-timegrid-bg-harness.skd-marker.skd-to{
+  background-image: linear-gradient(to right, var(--skd-to), var(--skd-to));
 }
+
 
 /* Badge (data-skd-label is on harness) */
 .fc .fc-timegrid-bg-harness.skd-marker::before{
   content: attr(data-skd-label);
   position: absolute;
-  right: 45px;
+  
+  left: 50%;
+  transform: translateX(-50%);
+
   top: -18px;
   font-size: 11px;
   font-weight: 500;
@@ -170,6 +173,28 @@ const CALENDAR_CSS = `
 .fc .fc-timegrid-bg-harness.skd-marker.skd-to::before{
   color: var(--skd-to);
 }
+
+
+/* ✅ Додаткова мітка тільки для "СКД по" */
+.fc .fc-timegrid-bg-harness.skd-marker.skd-to::after{
+  content: attr(data-skd-to-tag);
+  position: absolute;
+  
+  left: 50%;
+  transform: translateX(-50%);
+
+  top: -34px;              /* трохи вище основного бейджа (який -18px) */
+  font-size: 11px;
+  font-weight: 500;
+  background: rgba(255,255,255,.85);
+  padding: 1px 6px;
+  border-radius: 10px;
+  border: 1px solid rgba(0,0,0,.10);
+  line-height: 1.2;
+  color: #a91495;          /* ✅ ОЦЕ — КОЛІР мітки */
+  z-index: 9;
+}
+
 
 
 

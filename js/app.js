@@ -983,7 +983,8 @@ async function apiGetSkd(dateFrom, dateTo, signal) {
     .filter(x => x && typeof x === "object")
     .map(x => ({
       from: parseIsoDateTime(x.DateFrom ?? x.dateFrom ?? x.from),
-      to: parseIsoDateTime(x.DateTo ?? x.dateTo ?? x.to)
+      to: parseIsoDateTime(x.DateTo ?? x.dateTo ?? x.to),
+      totalTime : x.TotalTime ?? ""
     }))
     .filter(x => x.from && x.to);
 }
@@ -1006,6 +1007,7 @@ function skdIntervalsToMarkerEvents(items) {
       extendedProps: { __skd_marker: true, __skd_label: `СКД з ${fromTxt}` }
     });
 
+    const tt = String(it.totalTime || "").trim();
     out.push({
       id: `skd-to-${i}-${it.to.getTime()}`,
       start: it.to,
@@ -1013,7 +1015,7 @@ function skdIntervalsToMarkerEvents(items) {
       display: "background",
       editable: false,
       classNames: ["skd-marker", "skd-to"],
-      extendedProps: { __skd_marker: true, __skd_label: `СКД по ${toTxt}` }
+      extendedProps: { __skd_marker: true, __skd_label: `СКД по ${toTxt}`,  __skd_to_tag: tt ? `(${tt})` : "" }
     });
   }
   return out;
@@ -1574,12 +1576,24 @@ const widget = new ERPDayCalendar("#calendar", {
 
     if (info.event.extendedProps?.__skd_marker) {
       const labelText = info.event.extendedProps?.__skd_label || "СКД";
+      
       const harness = info.el.closest(".fc-timegrid-bg-harness");
       if (harness) {
         harness.classList.add("skd-marker");
         if (info.event.classNames?.includes("skd-to")) harness.classList.add("skd-to");
         if (info.event.classNames?.includes("skd-from")) harness.classList.add("skd-from");
+        
         harness.dataset.skdLabel = labelText;
+        
+        // ✅ тільки для "СКД по" — додаткова мітка
+        if (info.event.classNames?.includes("skd-to")) {
+          harness.dataset.skdToTag = info.event.extendedProps?.__skd_to_tag || "";
+        } else {
+          delete harness.dataset.skdToTag;
+        }
+
+
+
       }
     }
   },
