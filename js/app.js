@@ -651,6 +651,18 @@ function acUpdateActive() {
   }
 }
 
+function fillJournalIfEmpty(npld) {
+  if (!mDescription) return;
+
+  const cur = (mDescription.value || "").trim();
+  if (cur) return; // уже что-то ввели — не трогаем
+
+  const name = String(npld ?? "").trim();
+  if (!name) return;
+
+  mDescription.value = name;
+}
+
 function acPickIndex(i) {
   if (i < 0 || i >= acItems.length) return;
   const it = acItems[i];
@@ -660,6 +672,9 @@ function acPickIndex(i) {
 
   pldCache.set(code, { ...it, labelText });
   pldSet(code, labelText);
+
+  fillJournalIfEmpty(it.npld); // ✅ ДОБАВИТЬ
+
   pldHideList();
   window.updateKpldClearVisibility?.();
 }
@@ -768,6 +783,9 @@ async function pldPrefillByKpld(kpld) {
   if (pldCache.has(k)) {
     const hit = pldCache.get(k);
     pldSet(k, hit?.labelText || k);
+
+    fillJournalIfEmpty(hit?.npld); // ✅ ДОБАВИТЬ
+
     return;
   }
   try {
@@ -777,6 +795,9 @@ async function pldPrefillByKpld(kpld) {
       const labelText = buildPldInputText(hit);
       pldCache.set(k, { ...hit, labelText });
       pldSet(hit.kpld, labelText);
+
+      fillJournalIfEmpty(hit?.npld); // ✅ ДОБАВИТЬ
+
       return;
     }
   } catch { }
@@ -787,6 +808,9 @@ async function pldPrefillByKpld(kpld) {
       const labelText = buildPldInputText(hit);
       pldCache.set(k, { ...hit, labelText });
       pldSet(hit.kpld, labelText);
+
+      fillJournalIfEmpty(hit?.npld); // ✅ ДОБАВИТЬ
+
       return;
     }
   } catch (e) { err("PLD prefill failed:", e); }
@@ -1316,9 +1340,13 @@ mCancel.onclick = closeModal;
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && backdrop.style.display === "flex") closeModal();
 });
+
+/*
 backdrop.addEventListener("mousedown", (e) => {
   if (e.target === backdrop) closeModal();
 });
+*/
+
 
 function getStartEndFromModal() {
   const start0 = combineDateTime(mDate.value, mFrom.value);
