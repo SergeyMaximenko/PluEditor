@@ -2134,24 +2134,25 @@ mSave.onclick = async () => {
 // ========================================================
 
 
+
 async function deleteCurrentSelectedEvent() {
   if (!await requireLogin()) return;
 
-  // 1) Берём текущую "active" запись (ту, что подсвечена)
   const ev = editActiveEventId ? calendar.getEventById(editActiveEventId) : null;
   if (!ev) return;
-
-  // SKD маркеры не удаляем
   if (ev.extendedProps?.__skd_marker) return;
 
-  // 2) Подтверждение (то же самое, что было в модалке)
-  const ok = await confirmDelete();
+  const ok = await uiConfirm({
+    title: "🗑️ Видалити запис?",
+    text: "Ви впевнені, що хочете видалити цей запис?\nДію неможливо скасувати.",
+    okText: "Видалити",
+    cancelText: "Скасувати",
+    danger: true
+  });
   if (!ok) return;
 
-  // 3) Если открыта модалка — закрываем, чтобы UI не завис
   if (backdrop?.style.display === "flex") closeModal();
 
-  // 4) Удаление
   if (isTempId(ev.id)) {
     ev.remove();
     clearEditActive();
@@ -2162,7 +2163,7 @@ async function deleteCurrentSelectedEvent() {
     await safeDeleteEvent(ev);
     clearEditActive();
   } catch {
-    // safeDeleteEvent уже повесит error-mark на событие
+    // safeDeleteEvent сам поставить error-mark
   }
 }
 
