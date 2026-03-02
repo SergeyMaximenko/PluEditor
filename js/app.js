@@ -394,17 +394,29 @@ document.addEventListener("keydown", (e) => {
   }
 });
 
-document.addEventListener("keydown", async (e) => {
-  // чтобы не срабатывало при наборе текста в input/textarea
-  const tag = (e.target?.tagName || "").toLowerCase();
-  const typing = (tag === "input" || tag === "textarea" || e.target?.isContentEditable);
 
-  if (!typing && e.key === "Delete") {
+document.addEventListener("keydown", async (e) => {
+  const tag = (e.target?.tagName || "").toLowerCase();
+  const typing = (tag === "input" || tag === "textarea" || tag === "select" || e.target?.isContentEditable);
+  if (typing) return;
+
+  if (e.key === "Delete") {
     e.preventDefault();
     await deleteCurrentSelectedEvent();
+    return;
+  }
+
+  if (e.key === "F7" && !e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey) {
+    if (backdrop?.style.display === "flex") return;
+
+    const sel = widgetRef?.selection;
+    if (!sel) return;
+    if (!isWithinSingleDay(sel.start, sel.end)) return;
+
+    e.preventDefault();
+    await widgetRef?.hooks?.onCreateRequested?.({ start: sel.start, end: sel.end, calendar });
   }
 });
-
 
 
 // ========================================================
@@ -1340,6 +1352,27 @@ mCancel.onclick = closeModal;
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && backdrop.style.display === "flex") closeModal();
 });
+
+document.addEventListener("keydown", (e) => {
+  // працюємо тільки коли відкрита модалка
+  if (backdrop?.style.display !== "flex") return;
+
+  // Ctrl+Enter (можеш додати ще metaKey для Mac, якщо треба)
+  const isCtrlEnter = (e.key === "Enter" || e.code === "Enter" || e.code === "NumpadEnter") && e.ctrlKey;
+  if (!isCtrlEnter) return;
+
+  // щоб не тригерилось разом з іншими комбінаціями
+  if (e.altKey || e.shiftKey || e.metaKey) return;
+
+  // якщо список автокомпліта KPLD відкритий — НЕ зберігати (бо Enter там використовується)
+  if (mKpldList && mKpldList.style.display === "block") return;
+
+  e.preventDefault();
+  e.stopPropagation();
+
+  // запуск тієї ж логіки, що й кнопка (Додати/Коригувати)
+  mSave?.click();
+}, true);
 
 /*
 backdrop.addEventListener("mousedown", (e) => {
