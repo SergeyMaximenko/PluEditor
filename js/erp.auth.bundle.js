@@ -5,7 +5,9 @@
 // ========================================================
 
 export const ERPAuth = (() => {
-  const LS_AUTH_KEY = "erp_cal_auth_v2";
+  // Ticket живе тільки в памʼяті сторінки.
+  // Після F5 / закриття вкладки користувач має залогінитись заново.
+  let currentAuth = null;
 
   const s = (v) => String(v ?? "");
 
@@ -18,34 +20,30 @@ export const ERPAuth = (() => {
   }
 
   function readAuth(){
-    try{
-      const raw = localStorage.getItem(LS_AUTH_KEY);
-      if (!raw) return null;
+  if (!currentAuth?.ticket) return null;
+  return currentAuth;
+}
 
-      const obj = JSON.parse(raw);
-      if (!obj || typeof obj !== "object") return null;
+function writeAuth({ id, ticket, userName }){
+  const userIdCoded = encodeId(id);
 
-      const userIdCoded = s(obj.userIdCoded || obj.idEnc || "");
-      const userName = s(obj.userName || "");
+  currentAuth = {
+    id: s(id),
+    userIdCoded,
+    userName: s(userName),
+    ticket: s(ticket).trim()
+  };
 
-      const id = decodeId(userIdCoded);
-      if (!userIdCoded || !id || !userName) return null;
+  return currentAuth;
+}
 
-      return { userIdCoded, id, userName };
-    }catch{
-      return null;
-    }
-  }
+function clearAuth(){
+  currentAuth = null;
+}
 
-  function writeAuth({ id, userName }){
-    const userIdCoded = encodeId(id);
-    const obj = { userIdCoded, userName: s(userName) };
-    localStorage.setItem(LS_AUTH_KEY, JSON.stringify(obj));
-    return { userIdCoded, id: s(id), userName: s(userName) };
-  }
-
-  function clearAuth(){ localStorage.removeItem(LS_AUTH_KEY); }
-  function isLoggedIn(){ return !!readAuth(); }
+function isLoggedIn(){
+  return !!readAuth();
+}
 
   function getLoginDom(){
     return {
@@ -149,12 +147,20 @@ export const ERPAuth = (() => {
           return { success:false, message:"Невірний логін або пароль" };
         }
 
-        const id = s(data?.Id).trim();
-        const userName = s(data?.UserName).trim();
-        if (!id || !userName){
-          return { success:false, message:"Відсутні поля Id/UserName у відповіді сервера." };
-        }
-        return { success:true, id, userName };
+       const id = s(data?.Id).trim();
+const userName = s(data?.UserName).trim();
+const ticket = s(data?.Ticket).trim();
+
+if (!id || !userName || !ticket){
+  return {
+    success:false,
+    message:"Відсутні поля Id/UserName/Ticket у відповіді сервера."
+  };
+}
+
+return { success:true, id, userName, ticket };
+
+
       }catch(e){
         let messageError = "";
         if (e?.name === "AbortError"){
@@ -228,7 +234,11 @@ export const ERPAuth = (() => {
             return;
           }
 
-          writeAuth({ id: res.id, userName: res.userName });
+         writeAuth({
+  id: res.id,
+  userName: res.userName,
+  ticket: res.ticket
+});
 
           closeLoginModal(dom);
           refresh();

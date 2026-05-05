@@ -136,7 +136,7 @@ const LS_PLACEWORK_KEY = "erp_cal_last_placeWork_v1";
 // - dedupe по (kpld + description)
 // ========================================================
 const LS_RECENT_KEY = "erp_cal_recent_entries_v1";
-const RECENT_LIMIT = 30; // ✅ параметр (можешь менять)
+const RECENT_LIMIT = 1; // ✅ параметр (можешь менять)
 
 function normSpaces(s) {
   return String(s ?? "").replace(/\s+/g, " ").trim();
@@ -144,7 +144,7 @@ function normSpaces(s) {
 
 function loadRecent() {
   try {
-    const raw = localStorage.getItem(LS_RECENT_KEY);
+    const raw = sessionStorage.getItem(LS_RECENT_KEY);
     if (!raw) return [];
     const arr = JSON.parse(raw);
     if (!Array.isArray(arr)) return [];
@@ -162,7 +162,7 @@ function loadRecent() {
 
 function saveRecent(arr) {
   try {
-    localStorage.setItem(LS_RECENT_KEY, JSON.stringify(arr || []));
+    sessionStorage.setItem(LS_RECENT_KEY, JSON.stringify(arr || []));
   } catch { }
 }
 
@@ -217,27 +217,37 @@ function setLastPlaceWork(v) {
 // ========================================================
 // Auth params
 // ========================================================
-const LS_AUTH_KEY = "erp_cal_auth_v2"; // same as ERPAuth
-function getAuthFromLs() {
-  let userIdCoded = "";
-  let userName = "";
-  try {
-    const raw = localStorage.getItem(LS_AUTH_KEY);
-    if (raw) {
-      const obj = JSON.parse(raw);
-      userIdCoded = String(obj?.userIdCoded || obj?.idEnc || "").trim();
-      userName = String(obj?.userName || "").trim();
-    }
-  } catch { }
-  return { userIdCoded, userName };
+// ========================================================
+// Auth params + Ticket header
+// ========================================================
+function getAuth() {
+  return auth?.readAuth?.() || null;
 }
+
 function withAuthParams(params) {
-  const { userIdCoded, userName } = getAuthFromLs();
-  const p = params instanceof URLSearchParams ? params : new URLSearchParams(params || {});
-  if (userIdCoded) p.set("UserIdCoded", userIdCoded);
-  if (userName) p.set("UserName", userName);
+
+  const p = params instanceof URLSearchParams
+    ? params
+    : new URLSearchParams(params || {});
+
+
+
   return p;
 }
+
+function withTicketHeaders(headers = {}) {
+  const a = getAuth();
+
+  const h = { ...headers };
+
+  if (a?.ticket) {
+    h["Ticket"] = a.ticket;
+  }
+
+  return h;
+}
+
+
 
 // ========================================================
 // [4] DOM refs
@@ -568,12 +578,12 @@ function clearDeleteErrorText(ev) {
 // ========================================================
 // [9] API urls + helpers
 // ========================================================
-const API_LIST_URL = "https://webclient.it-enterprise.com/ws/api/_PLUTEST_GET";
-const API_CREATE_URL = "https://webclient.it-enterprise.com/ws/api/_PLUTEST_ADD";
-const API_UPDATE_URL = "https://webclient.it-enterprise.com/ws/api/_PLUTEST_UPD";
-const API_DELETE_URL = "https://webclient.it-enterprise.com/ws/api/_PLUTEST_DEL";
-const API_SKD_URL = "https://webclient.it-enterprise.com/ws/api/_PLUTEST_GETSKD";
-const API_PLD_URL = "https://webclient.it-enterprise.com/ws/api/_PLUTEST_GETPLD";
+const API_LIST_URL = "https://webclient.it-enterprise.com/ws/api/_PLUEDITOR_GET";
+const API_CREATE_URL = "https://webclient.it-enterprise.com/ws/api/_PLUEDITOR_ADD";
+const API_UPDATE_URL = "https://webclient.it-enterprise.com/ws/api/_PLUEDITOR_UPD";
+const API_DELETE_URL = "https://webclient.it-enterprise.com/ws/api/_PLUEDITOR_DEL";
+const API_SKD_URL = "https://webclient.it-enterprise.com/ws/api/_PLUEDITOR_GETSKD";
+const API_PLD_URL = "https://webclient.it-enterprise.com/ws/api/_PLUEDITOR_GETPLD";
 
 async function readApiJson(resp, opName) {
   const ct = (resp.headers.get("content-type") || "").toLowerCase();
@@ -741,7 +751,11 @@ async function apiGetPld({ q = "", kpld = "" } = {}) {
   const url = `${API_PLD_URL}?${params.toString()}`;
   log("API PLD ->", url);
 
-  const resp = await fetch(url, { method: "GET", headers: { "accept": "application/json" } });
+  const resp = await fetch(url, {
+  method: "GET",
+  headers: withTicketHeaders({ "accept": "application/json" })
+});
+
   const text = await resp.text();
   log("API PLD <- HTTP", resp.status, "raw:", text);
 
@@ -962,7 +976,12 @@ async function apiGetListJobs(dateFrom, dateTo, signal) {
 
   log("API LIST ->", url);
 
-  const resp = await fetch(url, { method: "GET", headers: { "accept": "application/json" }, signal });
+  const resp = await fetch(url, {
+  method: "GET",
+  headers: withTicketHeaders({ "accept": "application/json" }),
+  signal
+});
+
   const text = await resp.text();
   log("API LIST <- HTTP", resp.status, "raw:", text);
 
@@ -1003,7 +1022,12 @@ async function apiGetSkd(dateFrom, dateTo, signal) {
   const url = `${API_SKD_URL}?${params.toString()}`;
   log("API SKD ->", url);
 
-  const resp = await fetch(url, { method: "GET", headers: { "accept": "application/json" }, signal });
+  const resp = await fetch(url, {
+  method: "GET",
+  headers: withTicketHeaders({ "accept": "application/json" }),
+  signal
+});
+
   const text = await resp.text();
   log("API SKD <- HTTP", resp.status, "raw:", text);
 
@@ -1065,11 +1089,17 @@ async function apiCreateJob(payload) {
 
   let resp;
   try {
-    resp = await fetch(url, {
-      method: "POST",
-      headers: { "accept": "application/json", "Content-Type": "application/json" },
-      body: JSON.stringify({ Record: payload })
-    });
+    
+resp = await fetch(url, {
+  method: "POST",
+  headers: withTicketHeaders({
+    "accept": "application/json",
+    "Content-Type": "application/json"
+  }),
+  body: JSON.stringify({ Record: payload })
+});
+
+
   } catch (fetchErr) {
     throw new Error("Немає доступу до API: " + normalizeErrMessage(fetchErr));
   }
@@ -1096,11 +1126,18 @@ async function apiUpdateJob(payload) {
 
   let resp;
   try {
-    resp = await fetch(url, {
-      method: "POST",
-      headers: { "accept": "application/json", "Content-Type": "application/json" },
-      body: JSON.stringify({ Record: payload })
-    });
+    
+resp = await fetch(url, {
+  method: "POST",
+  headers: withTicketHeaders({
+    "accept": "application/json",
+    "Content-Type": "application/json"
+  }),
+  body: JSON.stringify({ Record: payload })
+});
+
+
+
   } catch (fetchErr) {
     throw new Error("Немає доступу до API: " + normalizeErrMessage(fetchErr));
   }
@@ -1126,7 +1163,12 @@ async function apiDeleteJob(id) {
 
   let resp;
   try {
-    resp = await fetch(url, { method: "POST", headers: { "accept": "application/json" } });
+    
+      resp = await fetch(url, {
+    method: "POST",
+    headers: withTicketHeaders({ "accept": "application/json" })
+  });
+
   } catch (fetchErr) {
     throw new Error("Немає доступу до API: " + normalizeErrMessage(fetchErr));
   }
