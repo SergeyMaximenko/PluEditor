@@ -155,7 +155,8 @@ function loadRecent() {
         description: String(x.description ?? "")
       }))
       .filter(x => x.kpld || normSpaces(x.description));
-  } catch {
+  } catch (e) {
+    console.warn(LOG_PREFIX, "loadRecent failed:", e);
     return [];
   }
 }
@@ -163,7 +164,9 @@ function loadRecent() {
 function saveRecent(arr) {
   try {
     sessionStorage.setItem(LS_RECENT_KEY, JSON.stringify(arr || []));
-  } catch { }
+  } catch (e) {
+    console.warn(LOG_PREFIX, "saveRecent failed:", e);
+  }
 }
 
 /**
@@ -208,10 +211,17 @@ function getLastPlaceWork() {
   try {
     const v = localStorage.getItem(LS_PLACEWORK_KEY);
     return (v && String(v).trim()) ? String(v).trim() : "";
-  } catch { return ""; }
+  } catch (e) {
+    console.warn(LOG_PREFIX, "getLastPlaceWork failed:", e);
+    return "";
+  }
 }
 function setLastPlaceWork(v) {
-  try { localStorage.setItem(LS_PLACEWORK_KEY, String(v ?? "")); } catch { }
+  try {
+    localStorage.setItem(LS_PLACEWORK_KEY, String(v ?? ""));
+  } catch (e) {
+    console.warn(LOG_PREFIX, "setLastPlaceWork failed:", e);
+  }
 }
 
 // ========================================================
@@ -259,7 +269,8 @@ const authSpinner = document.getElementById("authSpinner");
 const ctx = document.getElementById("ctx");
 const ctxHint = document.getElementById("ctxHint");
 const ctxCreate = document.getElementById("ctxCreate");
-const ctxClear = document.getElementById("ctxClear");
+const ctxClear  = document.getElementById("ctxClear");
+const ctxDelete = document.getElementById("ctxDelete");
 
 const backdrop = document.getElementById("backdrop");
 const modalTitle = document.getElementById("modalTitle");
@@ -280,6 +291,11 @@ const mPlaceWork = document.getElementById("mPlaceWork");
 const mError = document.getElementById("mError");
 
 ctxClear?.addEventListener("click", () => clearEditActive());
+
+ctxDelete?.addEventListener("click", () => {
+  ctx.style.display = "none";
+  deleteCurrentSelectedEvent();
+});
 
 if (mPlaceWork) {
   mPlaceWork.addEventListener("change", () => setLastPlaceWork(mPlaceWork.value));
@@ -515,6 +531,7 @@ function setEditActive(eventId) {
     oldEl?.classList.remove("is-edit-active");
   }
   editActiveEventId = eventId || null;
+  if (ctxDelete) ctxDelete.style.display = editActiveEventId ? "" : "none";
   if (!editActiveEventId) return;
 
   const apply = () => {
@@ -659,6 +676,13 @@ function pldHideList() {
   mKpldList.innerHTML = "";
 }
 
+function pldPositionList() {
+  const r = mKpldText.getBoundingClientRect();
+  mKpldList.style.left  = r.left + "px";
+  mKpldList.style.top   = (r.bottom + 4) + "px";
+  mKpldList.style.width = r.width + "px";
+}
+
 function acUpdateActive() {
   const els = [...mKpldList.querySelectorAll(".ac-item")];
   els.forEach((el, i) => el.classList.toggle("is-active", i === acActive));
@@ -707,6 +731,7 @@ function pldRenderList(items) {
 
   if (!acItems.length) {
     mKpldList.innerHTML = `<div class="ac-empty">Нічого не знайдено</div>`;
+    pldPositionList();
     mKpldList.style.display = "block";
     acActive = -1;
     return;
@@ -730,6 +755,7 @@ function pldRenderList(items) {
     `;
   }).join("");
 
+  pldPositionList();
   mKpldList.style.display = "block";
 
   const els = [...mKpldList.querySelectorAll(".ac-item")];
@@ -1373,8 +1399,19 @@ function openModal(mode, payload) {
 
 
 
+  const _m = backdrop.querySelector(".modal");
+  _m.style.transform = "none";
+  _m.style.left = "";
+  _m.style.top  = "";
+
   backdrop.style.display = "flex";
   backdrop.setAttribute("aria-hidden", "false");
+
+  // Center using explicit coords — transform:none prevents it from becoming
+  // a containing block for position:fixed children (dropdown list)
+  const mw = _m.offsetWidth, mh = _m.offsetHeight;
+  _m.style.left = Math.max(0, Math.round((window.innerWidth  - mw) / 2)) + "px";
+  _m.style.top  = Math.max(0, Math.round((window.innerHeight - mh) / 2)) + "px";
   window.updateKpldClearVisibility?.();
   setTimeout(() => mDescription.focus(), 0);
 }
@@ -1390,6 +1427,44 @@ function closeModal() {
 }
 
 mCancel.onclick = closeModal;
+
+// ===== Draggable modal =====
+(function initDragModal() {
+  const modal = backdrop.querySelector(".modal");
+  const handle = document.getElementById("modalTitle")?.closest(".modal-head");
+  if (!modal || !handle) return;
+
+  let dragging = false;
+  let startX = 0, startY = 0, startLeft = 0, startTop = 0;
+
+  handle.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0) return;
+    const rect = modal.getBoundingClientRect();
+    modal.style.transform = "none";
+    modal.style.left = rect.left + "px";
+    modal.style.top  = rect.top  + "px";
+    dragging  = true;
+    startX    = e.clientX;
+    startY    = e.clientY;
+    startLeft = rect.left;
+    startTop  = rect.top;
+    handle.classList.add("is-dragging");
+    handle.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+
+  handle.addEventListener("pointermove", (e) => {
+    if (!dragging) return;
+    const maxLeft = window.innerWidth  - modal.offsetWidth;
+    const maxTop  = window.innerHeight - modal.offsetHeight;
+    modal.style.left = Math.max(0, Math.min(maxLeft, startLeft + e.clientX - startX)) + "px";
+    modal.style.top  = Math.max(0, Math.min(maxTop,  startTop  + e.clientY - startY)) + "px";
+  });
+
+  const stopDrag = () => { dragging = false; handle.classList.remove("is-dragging"); };
+  handle.addEventListener("pointerup",     stopDrag);
+  handle.addEventListener("pointercancel", stopDrag);
+})();
 
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && backdrop.style.display === "flex") closeModal();
@@ -1416,11 +1491,6 @@ document.addEventListener("keydown", (e) => {
   mSave?.click();
 }, true);
 
-/*
-backdrop.addEventListener("mousedown", (e) => {
-  if (e.target === backdrop) closeModal();
-});
-*/
 
 
 function getStartEndFromModal() {
@@ -1442,32 +1512,6 @@ window.__erpRefreshWhenPreview = refreshWhenPreview;
 
 [mDate, mFrom, mTo].forEach(el => el.addEventListener("change", refreshWhenPreview));
 [mFrom, mTo].forEach(el => el.addEventListener("input", refreshWhenPreview));
-
-// ========================================================
-// [14] Confirm delete (2nd modal)
-// ========================================================
-function confirmDelete() {
-  return new Promise(resolve => {
-    const b = document.getElementById("confirmBackdrop");
-    const okBtn = document.getElementById("confirmOk");
-    const cancelBtn = document.getElementById("confirmCancel");
-
-    b.style.display = "flex";
-
-    const onEsc = (e) => { if (e.key === "Escape") cleanup(false); };
-    const cleanup = (result) => {
-      b.style.display = "none";
-      okBtn.onclick = null;
-      cancelBtn.onclick = null;
-      document.removeEventListener("keydown", onEsc);
-      resolve(result);
-    };
-
-    okBtn.onclick = () => cleanup(true);
-    cancelBtn.onclick = () => cleanup(false);
-    document.addEventListener("keydown", onEsc);
-  });
-}
 
 // ========================================================
 // [15] AUTH init (PROD): ERPAuth uses app toast
