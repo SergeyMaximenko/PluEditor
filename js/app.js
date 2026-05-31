@@ -435,6 +435,37 @@ document.addEventListener("keydown", async (e) => {
     return;
   }
 
+  // Ctrl+V → відкрити форму і підставити останній/скопійований запис
+  if (e.code === "KeyV" && e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey) {
+    if (backdrop?.style.display === "flex") return;       // модалка вже відкрита
+    const last = getLastRecentEntry();
+    if (!last) return;                                    // буфер порожній — звичайна вставка
+
+    const sel = widgetRef?.selection || widgetRef?.lastSelection;
+    if (!sel || !isWithinSingleDay(sel.start, sel.end)) {
+      toast("Виділіть інтервал часу на календарі.", "warn", "📋 Вставка задачі", 2500);
+      return;
+    }
+
+    e.preventDefault();
+    await widgetRef?.hooks?.onCreateRequested?.({ start: sel.start, end: sel.end, calendar });
+    mPasteLast?.click();   // модалка вже відкрита — підставляємо
+    return;
+  }
+
+  // Ctrl+C на виділеній задачі → скопіювати в буфер "останнього запису"
+  if (e.code === "KeyC" && e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey) {
+    const ev = editActiveEventId ? calendar.getEventById(editActiveEventId) : null;
+    if (ev && !ev.extendedProps?.__skd_marker) {
+      e.preventDefault();
+      const kpld       = String(ev.extendedProps?.kpld ?? "").trim();
+      const description = String(ev.extendedProps?.description ?? "");
+      pushRecentEntry({ kpld, description });
+      toast("Задачу скопійовано. Підставте кнопкою 🕘.", "ok", "📋 Копія задачі", 2500);
+      return;
+    }
+  }
+
   if (e.key === "F7" && !e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey) {
     if (backdrop?.style.display === "flex") return;
 
