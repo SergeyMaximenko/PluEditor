@@ -368,6 +368,9 @@ const mPasteMail = document.getElementById("mPasteMail");
 const mPasteLast = document.getElementById("mPasteLast");
 
 mPasteLast?.addEventListener("click", async () => {
+
+
+
   try {
     setModalError?.("");
 
@@ -1439,6 +1442,7 @@ mCancel.onclick = closeModal;
 
   handle.addEventListener("pointerdown", (e) => {
     if (e.button !== 0) return;
+    if (e.target.closest("button")) return;   // не перехоплювати кліки по кнопках
     const rect = modal.getBoundingClientRect();
     modal.style.transform = "none";
     modal.style.left = rect.left + "px";
