@@ -332,7 +332,7 @@ export class ERPDayCalendar {
     this._loginBtnText = "Логін";
 
     this.calendar = new FullCalendar.Calendar(this.el, {
-      initialView: "timeGridDay",
+      initialView: "timeGridWeek",
       nowIndicator: true,
 
       eventResizableFromStart: true,
