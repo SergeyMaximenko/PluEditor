@@ -679,6 +679,7 @@ function throwIfNotSuccess(opName, res) {
 // Кэш: kpld -> { kpld,npld,pldObjCode,pldKzaj,labelText }
 const pldCache = new Map();
 let pldDebTimer = null;
+let pldBlurHideTimer = null;
 
 let acItems = [];
 let acActive = -1;
@@ -952,6 +953,11 @@ function initPldUI() {
   if (!mKpldText || !mKpldList || !mKpld) return;
 
   mKpldText.addEventListener("focus", () => {
+    // скасувати "відкладений" pldHideList() від попереднього blur (напр. при
+    // швидкому переході Ctrl+Enter -> закриття/відкриття наступної модалки),
+    // інакше він через 120мс закриє щойно відкритий список
+    clearTimeout(pldBlurHideTimer);
+
     const val = (mKpldText.value || "").trim();
     const hasSelected = !!mKpld.value;
 
@@ -962,7 +968,7 @@ function initPldUI() {
     pldDebTimer = setTimeout(() => pldSearch(val), 0);
   });
 
-  mKpldText.addEventListener("input", () => {
+  function triggerPldTextSearch() {
     const val = mKpldText.value || "";
     mKpld.value = "";
     clearTimeout(pldDebTimer);
@@ -973,7 +979,10 @@ function initPldUI() {
     }, 200);
 
     window.updateKpldClearVisibility?.();
-  });
+  }
+
+  mKpldText.addEventListener("input", triggerPldTextSearch);
+  mKpldText.addEventListener("dblclick", triggerPldTextSearch);
 
   mKpldText.addEventListener("keydown", (e) => {
     if (!acOpen || mKpldList.style.display === "none") {
@@ -1014,7 +1023,7 @@ function initPldUI() {
   });
 
   mKpldText.addEventListener("blur", () => {
-    setTimeout(() => {
+    pldBlurHideTimer = setTimeout(() => {
       pldHideList();
       const raw = (mKpldText.value || "").trim();
       if (raw && !mKpld.value) {
@@ -2346,6 +2355,12 @@ async function startBulkPasteFromClipboard() {
       // choice === "resume" -> повернутись до цього ж рядка
       i--;
       continue;
+    }
+
+    // action === "save" -> перейти до наступного запису
+    const remainingAfterSave = rows.length - i - 1;
+    if (remainingAfterSave > 0) {
+      toast(`Додано. Залишилось ${remainingAfterSave} ${pluralRecords(remainingAfterSave)}…`, "ok", "📋 Циклічне додавання", 2000);
     }
   }
 
