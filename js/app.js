@@ -268,9 +268,10 @@ const authSpinner = document.getElementById("authSpinner");
 
 const ctx = document.getElementById("ctx");
 const ctxHint = document.getElementById("ctxHint");
-const ctxCreate = document.getElementById("ctxCreate");
-const ctxClear  = document.getElementById("ctxClear");
-const ctxDelete = document.getElementById("ctxDelete");
+const ctxCreate    = document.getElementById("ctxCreate");
+const ctxClear     = document.getElementById("ctxClear");
+const ctxDelete    = document.getElementById("ctxDelete");
+const ctxPasteBulk = document.getElementById("ctxPasteBulk");
 
 const backdrop = document.getElementById("backdrop");
 const modalTitle = document.getElementById("modalTitle");
@@ -295,6 +296,11 @@ ctxClear?.addEventListener("click", () => clearEditActive());
 ctxDelete?.addEventListener("click", () => {
   ctx.style.display = "none";
   deleteCurrentSelectedEvent();
+});
+
+ctxPasteBulk?.addEventListener("click", () => {
+  ctx.style.display = "none";
+  startBulkPasteFromClipboard();
 });
 
 if (mPlaceWork) {
@@ -461,7 +467,7 @@ document.addEventListener("keydown", async (e) => {
       const kpld       = String(ev.extendedProps?.kpld ?? "").trim();
       const description = String(ev.extendedProps?.description ?? "");
       pushRecentEntry({ kpld, description });
-      toast("Задачу скопійовано. Підставте кнопкою 🕘.", "ok", "📋 Копія задачі", 2500);
+      toast("Задачу скопійовано. Підставте кнопкою 🕘 або Ctrl-V.", "ok", "📋 Копія задачі", 2500);
       return;
     }
   }
@@ -759,6 +765,19 @@ function acPickIndex(i) {
   window.updateKpldClearVisibility?.();
 }
 
+function setKpldSpinner(on) {
+  const sp = document.getElementById("mKpldSpinner");
+  if (!sp) return;
+  if (on) {
+    const clearBtn = document.getElementById("mKpldClear");
+    const clearVisible = !!clearBtn && clearBtn.style.display !== "none";
+    sp.style.right = clearVisible ? "34px" : "10px";
+    sp.style.display = "block";
+  } else {
+    sp.style.display = "none";
+  }
+}
+
 function pldRenderList(items) {
   acItems = Array.isArray(items) ? items : [];
   acOpen = true;
@@ -839,6 +858,7 @@ async function apiGetPld({ q = "", kpld = "" } = {}) {
 }
 
 async function pldLoadAll() {
+  setKpldSpinner(true);
   try {
     const items = await apiGetPld({ q: "" });
     items.forEach(it => pldCache.set(String(it.kpld), { ...it, labelText: buildPldInputText(it) }));
@@ -846,10 +866,13 @@ async function pldLoadAll() {
   } catch (e) {
     err("PLD loadAll failed:", e);
     pldHideList();
+  } finally {
+    setKpldSpinner(false);
   }
 }
 async function pldSearch(q) {
   const s = (q || "").trim();
+  setKpldSpinner(true);
   try {
     const items = await apiGetPld({ q: s });
     items.forEach(it => pldCache.set(String(it.kpld), { ...it, labelText: buildPldInputText(it) }));
@@ -857,6 +880,8 @@ async function pldSearch(q) {
   } catch (e) {
     err("PLD search failed:", e);
     pldHideList();
+  } finally {
+    setKpldSpinner(false);
   }
 }
 async function pldPrefillByKpld(kpld) {
@@ -1357,6 +1382,10 @@ let currentEvent = null;
 let pendingCreate = null;
 let modalOriginal = null; // { kpld: "123", description: "..." } only for edit
 
+// Циклічне додавання з буфера: якщо активне — mSave/mCancel/Esc
+// резолвлять цей проміс замість звичайної поведінки
+let cyclicPasteState = null;
+
 
 function fillModalWhen(start, end) {
   mWhen.textContent = formatWhenWithDuration(start, end);
@@ -1460,7 +1489,17 @@ function closeModal() {
   pldHideList();
 }
 
-mCancel.onclick = closeModal;
+function resolveCyclicPaste(action) {
+  if (!cyclicPasteState) return;
+  const { resolve } = cyclicPasteState;
+  cyclicPasteState = null;
+  resolve({ action });
+}
+
+mCancel.onclick = () => {
+  closeModal();
+  resolveCyclicPaste("cancel");
+};
 
 // ===== Draggable modal =====
 (function initDragModal() {
@@ -1502,7 +1541,10 @@ mCancel.onclick = closeModal;
 })();
 
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && backdrop.style.display === "flex") closeModal();
+  if (e.key === "Escape" && backdrop.style.display === "flex") {
+    closeModal();
+    resolveCyclicPaste("cancel");
+  }
 });
 
 document.addEventListener("keydown", (e) => {
@@ -2141,6 +2183,176 @@ async function safeDeleteEvent(event) {
 }
 
 // ========================================================
+// [21.5] Циклічне додавання записів з буфера (TSV з Excel)
+// ========================================================
+
+// Колонки визначаються за назвою заголовка (а не позицією) — тому "№" і
+// "Тривалість" ігноруються незалежно від того, чи вони скопійовані.
+// Дата береться з колонки "Дата" (формат DD.MM.YYYY) для кожного рядка окремо;
+// якщо такої колонки нема — старий формат (дата в заголовку "Опис...") як фолбек.
+function parseBulkClipboard(text) {
+  const lines = String(text ?? "")
+    .split(/\r\n|\n|\r/)
+    .filter(l => l.trim().length > 0);
+
+  if (!lines.length) return { rows: [] };
+
+  const header = lines[0].split("\t").map(c => c.trim());
+
+  const idxDescr = header.findIndex(c => /опис/i.test(c));
+  const idxFrom  = header.findIndex(c => /^час\s*з$/i.test(c));
+  const idxTo    = header.findIndex(c => /^час\s*по$/i.test(c));
+  const idxDate  = header.findIndex(c => /дата/i.test(c));
+
+  let headerDate = null;
+  if (idxDescr >= 0) {
+    const m = header[idxDescr].match(/(\d{2})[.\-](\d{2})[.\-](\d{4})/);
+    if (m) headerDate = `${m[3]}-${m[2]}-${m[1]}`;
+  }
+
+  const rows = [];
+  if (idxDescr >= 0 && idxFrom >= 0 && idxTo >= 0) {
+    for (let i = 1; i < lines.length; i++) {
+      const cols = lines[i].split("\t");
+      const description = (cols[idxDescr] ?? "").trim();
+      const from = (cols[idxFrom] ?? "").trim();
+      const to = (cols[idxTo] ?? "").trim();
+
+      // рядок "Загальний врахований робочий час" та інші службові рядки
+      // не мають коректних Час з / Час по -> відсіюються самі
+      if (!description || !parseTimeHHMM(from) || !parseTimeHHMM(to)) continue;
+
+      let date = null;
+      if (idxDate >= 0) {
+        const raw = (cols[idxDate] ?? "").trim();
+        const m = raw.match(/(\d{2})[.\-](\d{2})[.\-](\d{4})/);
+        if (m) date = `${m[3]}-${m[2]}-${m[1]}`;
+      }
+      if (!date) date = headerDate;
+      if (!date) continue; // немає жодного джерела дати для цього рядка
+
+      rows.push({ description, from, to, date });
+    }
+  }
+
+  return { rows };
+}
+
+function pluralRecords(n) {
+  const mod10 = n % 10, mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return "запис";
+  if ([2, 3, 4].includes(mod10) && ![12, 13, 14].includes(mod100)) return "записи";
+  return "записів";
+}
+
+// Діалог при Esc посеред циклу (не на останньому рядку):
+// динамічно будується на базі існуючих класів .modal-backdrop/.modal,
+// щоб не чіпати спільний uiConfirm (він лише двокнопковий).
+function askCyclicCancelChoice(remaining) {
+  return new Promise(resolve => {
+    const el = document.createElement("div");
+    el.className = "modal-backdrop";
+    el.style.display = "flex";
+    el.style.zIndex = "100000";
+
+    el.innerHTML = `
+      <div class="modal" style="max-width:640px;">
+        <div class="modal-title">⏸️ Не додавати решту записів?</div>
+        <div class="small" style="margin-top:8px;">
+          Залишилось ще ${remaining} ${pluralRecords(remaining)} для додавання.
+        </div>
+        <div class="actions" style="margin-top:16px; flex-wrap:nowrap;">
+          <button id="cycStopAll" style="background:#dc2626;border-color:#dc2626;color:#fff; flex:1 1 auto; white-space:normal; font-size:13px; padding:8px 10px;">Так, не додавати решту записів</button>
+          <button id="cycSkipOne" style="flex:1 1 auto; white-space:normal; font-size:13px; padding:8px 10px;">Пропустити тільки поточний запис</button>
+          <button id="cycResume" class="primary" style="flex:1 1 auto; white-space:normal; font-size:13px; padding:8px 10px;">Відмінити дію</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(el);
+
+    const cleanup = (result) => {
+      document.removeEventListener("keydown", onKeyDown);
+      el.remove();
+      resolve(result);
+    };
+
+    const onKeyDown = (e) => {
+      if (e.key === "Escape") cleanup("resume");
+    };
+    document.addEventListener("keydown", onKeyDown);
+
+    el.querySelector("#cycStopAll").onclick = () => cleanup("stopAll");
+    el.querySelector("#cycSkipOne").onclick = () => cleanup("skipOne");
+    const resumeBtn = el.querySelector("#cycResume");
+    resumeBtn.onclick = () => cleanup("resume");
+
+    setTimeout(() => resumeBtn.focus(), 0);
+  });
+}
+
+async function startBulkPasteFromClipboard() {
+  if (!await requireLogin()) return;
+
+  let text = "";
+  try {
+    text = await navigator.clipboard.readText();
+  } catch (e) {
+    toast("Не вдалося прочитати буфер обміну. Дозвольте доступ у браузері.", "error", "Буфер обміну");
+    return;
+  }
+
+  const { rows } = parseBulkClipboard(text);
+
+  if (!rows.length) {
+    toast("Не знайдено жодного придатного рядка для додавання.", "warn", "Циклічне додавання");
+    return;
+  }
+
+  toast(`Знайдено ${rows.length} записів. Починаємо додавання…`, "ok", "📋 Циклічне додавання", 3000);
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const start = combineDateTime(row.date, row.from);
+    const end = combineDateTime(row.date, row.to);
+    if (!start || !end) continue;
+
+    await gotoDateIfOutOfRangeAsync(start);
+
+    openModal("create", { start, end, description: row.description });
+    // openModal сам ставить фокус на mDescription через setTimeout(...,0);
+    // цей виклик реєструється пізніше -> виконається після нього і "переб'є" фокус
+    setTimeout(() => mKpldText?.focus(), 0);
+
+    const result = await new Promise(resolve => { cyclicPasteState = { resolve }; });
+
+    if (result.action === "cancel") {
+      const remaining = rows.length - i - 1;
+
+      if (remaining <= 0) {
+        toast("Циклічне додавання зупинено.", "warn", "📋 Циклічне додавання");
+        return;
+      }
+
+      const choice = await askCyclicCancelChoice(remaining);
+
+      if (choice === "stopAll") {
+        toast("Циклічне додавання зупинено. Решту записів не додано.", "warn", "📋 Циклічне додавання");
+        return;
+      }
+      if (choice === "skipOne") {
+        toast("Поточний запис пропущено.", "warn", "📋 Циклічне додавання");
+        continue;
+      }
+      // choice === "resume" -> повернутись до цього ж рядка
+      i--;
+      continue;
+    }
+  }
+
+  toast("Циклічне додавання завершено.", "ok", "📋 Циклічне додавання");
+}
+
+// ========================================================
 // [22] SAVE / DELETE in modal
 // ========================================================
 mSave.onclick = async () => {
@@ -2189,7 +2401,7 @@ mSave.onclick = async () => {
     pushRecentEntry({ kpld: nowK, description: nowD });
   }
 
-
+  resolveCyclicPaste("save");
 
   if (modalMode === "create") {
     setLastPlaceWork(placeWorkVal);

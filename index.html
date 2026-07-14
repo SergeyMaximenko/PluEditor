@@ -34,6 +34,7 @@
     <div id="ctxHint" class="hint">Виберіть інтервал</div>
     <button id="ctxCreate">➕ Додати запис</button>
     <button id="ctxDelete" style="display:none;">🗑️ Видалити запис</button>
+    <button id="ctxPasteBulk">📋 Циклічно додати записи з буфера</button>
     <button id="ctxClear">🧹 Очистити виділення</button>
   </div>
 
@@ -88,6 +89,7 @@
             __placeholder="Оберіть (список зʼявиться при фокусі) або введіть для пошуку…"
           />
           <input id="mKpld" type="hidden" value="" />
+          <span id="mKpldSpinner" class="ac-input-spinner" style="display:none;"></span>
           <button type="button" id="mKpldClear" class="ac-clear-btn" title="Очистити">✖</button>
           <div id="mKpldList" class="ac-list" style="display:none;"></div>
         </div>

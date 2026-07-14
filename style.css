@@ -436,6 +436,19 @@ button:disabled {
   font-weight: 700;
 }
 
+.ac-input-spinner {
+  position: absolute;
+  top: calc(50% - 8px); /* половина висоти (16px) — не через transform, він зайнятий обертанням */
+  right: 10px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid rgba(0, 0, 0, .14);
+  border-top-color: rgba(26, 115, 232, 1);
+  animation: spin .9s linear infinite;
+  pointer-events: none;
+}
+
 /* ===== Modal head + icon buttons ===== */
 .modal-head {
   display: flex;
